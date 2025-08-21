@@ -1,9 +1,8 @@
-import consul
 import os
+import consul
 import logging
 import requests
 import jwt
-import json
 from datetime import datetime, timedelta
 from functools import wraps
 from flask import Flask, request, jsonify
@@ -130,42 +129,142 @@ def admin_required(f):
     
     return decorated
 
-def parse_date(date_str):
-    """Parse date string to datetime object"""
-    try:
-        return datetime.strptime(date_str, '%Y-%m-%d')
-    except ValueError:
+def parse_date(date_string):
+    """Parse date string in various formats"""
+    if not date_string:
         return None
-
-def filter_transactions_by_date(transactions, start_date, end_date):
-    """Filter transactions by date range"""
-    filtered = []
-    for transaction in transactions:
-        transaction_date = datetime.fromisoformat(transaction['timestamp'].replace('Z', '+00:00'))
-        if start_date <= transaction_date.date() <= end_date:
-            filtered.append(transaction)
-    return filtered
-
-def calculate_summary(transactions):
-    """Calculate summary statistics for transactions"""
-    summary = {
-        'total_count': len(transactions),
-        'total_amount': sum(t['amount'] for t in transactions),
-        'by_type': {},
-    }
     
-    # Count by transaction type
-    for t in transactions:
-        t_type = t['transaction_type']
-        if t_type not in summary['by_type']:
-            summary['by_type'][t_type] = {
-                'count': 0,
-                'amount': 0
-            }
-        summary['by_type'][t_type]['count'] += 1
-        summary['by_type'][t_type]['amount'] += t['amount']
+    # Try different date formats
+    formats = ['%Y-%m-%d', '%Y-%m-%dT%H:%M:%S', '%Y-%m-%d %H:%M:%S']
+    for fmt in formats:
+        try:
+            return datetime.strptime(date_string, fmt)
+        except ValueError:
+            continue
     
-    return summary
+    raise ValueError(f"Invalid date format: {date_string}")
+
+def get_user_accounts(user_id, token):
+    """Get all accounts for a user"""
+    try:
+        response = requests.get(
+            f"{ACCOUNT_SERVICE_URL}/api/accounts/list",
+            headers={'Authorization': f'Bearer {token}'}
+        )
+        if response.ok:
+            return response.json().get('accounts', [])
+    except requests.RequestException:
+        pass
+    return []
+
+def get_account_details(account_id, token):
+    """Get account details"""
+    try:
+        response = requests.get(
+            f"{ACCOUNT_SERVICE_URL}/api/accounts/details/{account_id}",
+            headers={'Authorization': f'Bearer {token}'}
+        )
+        if response.ok:
+            return response.json()
+    except requests.RequestException:
+        pass
+    return None
+
+def get_account_transactions(account_id, token, start_date=None, end_date=None):
+    """Get transactions for an account"""
+    try:
+        params = {}
+        if start_date:
+            params['start_date'] = start_date.isoformat()
+        if end_date:
+            params['end_date'] = end_date.isoformat()
+            
+        response = requests.get(
+            f"{TRANSACTION_SERVICE_URL}/api/transactions/account/{account_id}",
+            headers={'Authorization': f'Bearer {token}'},
+            params=params
+        )
+        if response.ok:
+            return response.json().get('transactions', [])
+    except requests.RequestException:
+        pass
+    return []
+
+def get_user_transactions(token, start_date=None, end_date=None):
+    """Get all transactions for a user"""
+    try:
+        params = {}
+        if start_date:
+            params['start_date'] = start_date.isoformat()
+        if end_date:
+            params['end_date'] = end_date.isoformat()
+            
+        response = requests.get(
+            f"{TRANSACTION_SERVICE_URL}/api/transactions/list",
+            headers={'Authorization': f'Bearer {token}'},
+            params=params
+        )
+        if response.ok:
+            return response.json().get('transactions', [])
+    except requests.RequestException:
+        pass
+    return []
+
+def get_all_accounts(auth_header):
+    """Get all accounts (admin only)"""
+    try:
+        response = requests.get(
+            f"{ACCOUNT_SERVICE_URL}/api/accounts/all",
+            headers={'Authorization': auth_header}
+        )
+        if response.ok:
+            return response.json().get('accounts', [])
+    except requests.RequestException:
+        pass
+    return []
+
+def get_all_transactions(auth_header):
+    """Get all transactions (admin only)"""
+    try:
+        response = requests.get(
+            f"{TRANSACTION_SERVICE_URL}/api/transactions/all",
+            headers={'Authorization': auth_header}
+        )
+        if response.ok:
+            return response.json().get('transactions', [])
+    except requests.RequestException:
+        pass
+    return []
+
+def get_all_users(auth_header):
+    """Get all users (admin only)"""
+    try:
+        response = requests.get(
+            f"{AUTH_SERVICE_URL}/api/auth/users",
+            headers={'Authorization': auth_header}
+        )
+        if response.ok:
+            return response.json().get('users', [])
+    except requests.RequestException:
+        pass
+    return []
+
+def save_report(user_id, report_type, title, description, parameters, data):
+    """Save report to database"""
+    with app.app_context():
+        report = Report(
+            user_id=user_id,
+            report_type=report_type,
+            title=title,
+            description=description,
+            parameters=parameters,
+            data=data
+        )
+        db.session.add(report)
+        db.session.commit()
+        # Refresh to get the ID
+        db.session.refresh(report)
+        return report
 
 # Routes
 @app.route('/api/health', methods=['GET'])
@@ -175,320 +274,372 @@ def health_check():
 
 @app.route('/api/reports/account/<account_id>', methods=['GET'])
 @token_required
-def account_report(current_user, account_id):
-    """Generate report for specific account"""
-    # Get parameters
-    start_date_str = request.args.get('start_date')
-    end_date_str = request.args.get('end_date')
-    
-    # Parse dates
-    start_date = parse_date(start_date_str) if start_date_str else (datetime.now() - timedelta(days=30)).date()
-    end_date = parse_date(end_date_str) if end_date_str else datetime.now().date()
-    
-    # Verify account access
+def generate_account_report(current_user, account_id):
+    """Generate detailed account activity report"""
     try:
-        token = request.headers.get('Authorization').split(' ')[1]
-        response = requests.get(
-            f"{ACCOUNT_SERVICE_URL}/api/accounts/details/{account_id}",
-            headers={'Authorization': f'Bearer {token}'}
-        )
+        # Get query parameters
+        start_date_str = request.args.get('start_date')
+        end_date_str = request.args.get('end_date')
         
-        if not response.ok:
-            return jsonify({'message': 'Failed to access account'}), response.status_code
+        # Set default date range (last 30 days)
+        end_date = parse_date(end_date_str) if end_date_str else datetime.now()
+        start_date = parse_date(start_date_str) if start_date_str else end_date - timedelta(days=30)
         
-        account = response.json()
-            
-    except requests.RequestException:
-        return jsonify({'message': 'Account service unavailable'}), 503
-    
-    # Get transactions for this account
-    try:
-        response = requests.get(
-            f"{TRANSACTION_SERVICE_URL}/api/transactions/account/{account_id}",
-            headers={'Authorization': f'Bearer {token}'}
-        )
+        token = request.headers.get('Authorization')
         
-        if not response.ok:
-            return jsonify({'message': 'Failed to retrieve transactions'}), response.status_code
-            
-        transactions = response.json().get('transactions', [])
+        # Get account details
+        account = get_account_details(account_id, token)
+        if not account:
+            return jsonify({'message': 'Account not found or access denied'}), 404
         
-    except requests.RequestException:
-        return jsonify({'message': 'Transaction service unavailable'}), 503
-    
-    # Filter transactions by date
-    filtered_transactions = filter_transactions_by_date(transactions, start_date, end_date)
-    
-    # Calculate summary statistics
-    summary = calculate_summary(filtered_transactions)
-    
-    # Create report
-    report_data = {
-        'account': account,
-        'period': {
-            'start_date': start_date.isoformat(),
-            'end_date': end_date.isoformat()
-        },
-        'summary': summary,
-        'transactions': filtered_transactions
-    }
-    
-    # Save report
-    with app.app_context():
-        report = Report(
-            user_id=current_user['user_id'],
-            report_type='account',
-            title=f"Account Report: {account['account_number']}",
-            description=f"Account activity report from {start_date.isoformat()} to {end_date.isoformat()}",
-            parameters={
-                'account_id': account_id,
+        # Verify account ownership (unless admin)
+        if account.get('user_id') != current_user['user_id'] and current_user['role'] != 'admin':
+            return jsonify({'message': 'Access denied'}), 403
+        
+        # Get transactions for the account
+        transactions = get_account_transactions(account_id, token, start_date, end_date)
+        
+        # Calculate summary statistics
+        total_transactions = len(transactions)
+        total_deposits = sum(t['amount'] for t in transactions if t['transaction_type'] == 'deposit')
+        total_withdrawals = sum(t['amount'] for t in transactions if t['transaction_type'] == 'withdrawal')
+        total_transfers_in = sum(t['amount'] for t in transactions if t['transaction_type'] == 'transfer' and t.get('to_account_id') == account_id)
+        total_transfers_out = sum(t['amount'] for t in transactions if t['transaction_type'] == 'transfer' and t.get('from_account_id') == account_id)
+        
+        # Group transactions by type
+        transaction_types = {}
+        for t in transactions:
+            t_type = t['transaction_type']
+            if t_type not in transaction_types:
+                transaction_types[t_type] = {'count': 0, 'total_amount': 0}
+            transaction_types[t_type]['count'] += 1
+            transaction_types[t_type]['total_amount'] += t['amount']
+        
+        # Generate report data
+        report_data = {
+            'account': account,
+            'period': {
                 'start_date': start_date.isoformat(),
                 'end_date': end_date.isoformat()
             },
-            report_data=report_data
-        )
+            'summary': {
+                'total_transactions': total_transactions,
+                'total_deposits': total_deposits,
+                'total_withdrawals': total_withdrawals,
+                'total_transfers_in': total_transfers_in,
+                'total_transfers_out': total_transfers_out,
+                'net_change': total_deposits + total_transfers_in - total_withdrawals - total_transfers_out,
+                'current_balance': account['balance']
+            },
+            'transaction_breakdown': transaction_types,
+            'transactions': transactions
+        }
         
-        db.session.add(report)
-        db.session.commit()
+        # Save report
+        parameters = {
+            'account_id': account_id,
+            'start_date': start_date.isoformat(),
+            'end_date': end_date.isoformat()
+        }
+        
+        title = f"Account Report - {account['account_number']}"
+        description = f"Activity report for account {account['account_number']} from {start_date.strftime('%Y-%m-%d')} to {end_date.strftime('%Y-%m-%d')}"
+        
+        report = save_report(current_user['user_id'], 'account', title, description, parameters, report_data)
         
         return jsonify({
-            'report': report.to_dict()
+            'report_id': report.id,
+            'report': report_data
         }), 200
+        
+    except ValueError as e:
+        return jsonify({'message': str(e)}), 400
+    except Exception as e:
+        logger.error(f"Error generating account report: {str(e)}")
+        return jsonify({'message': 'Internal server error'}), 500
 
 @app.route('/api/reports/transactions', methods=['GET'])
 @token_required
-def transaction_report(current_user):
-    """Generate transaction report for user's accounts"""
-    # Get parameters
-    start_date_str = request.args.get('start_date')
-    end_date_str = request.args.get('end_date')
-    
-    # Parse dates
-    start_date = parse_date(start_date_str) if start_date_str else (datetime.now() - timedelta(days=30)).date()
-    end_date = parse_date(end_date_str) if end_date_str else datetime.now().date()
-    
-    # Get all accounts for the user
+def generate_transaction_report(current_user):
+    """Generate user's cross-account transaction report"""
     try:
-        token = request.headers.get('Authorization').split(' ')[1]
-        response = requests.get(
-            f"{ACCOUNT_SERVICE_URL}/api/accounts/list",
-            headers={'Authorization': f'Bearer {token}'}
-        )
+        # Get query parameters
+        start_date_str = request.args.get('start_date')
+        end_date_str = request.args.get('end_date')
         
-        if not response.ok:
-            return jsonify({'message': 'Failed to retrieve accounts'}), response.status_code
+        # Set default date range (last 30 days)
+        end_date = parse_date(end_date_str) if end_date_str else datetime.now()
+        start_date = parse_date(start_date_str) if start_date_str else end_date - timedelta(days=30)
+        
+        token = request.headers.get('Authorization')
+        
+        # Get user's accounts
+        accounts = get_user_accounts(current_user['user_id'], token)
+        
+        # Get all transactions for the user
+        transactions = get_user_transactions(token, start_date, end_date)
+        
+        # Calculate summary statistics
+        total_transactions = len(transactions)
+        total_deposits = sum(t['amount'] for t in transactions if t['transaction_type'] == 'deposit')
+        total_withdrawals = sum(t['amount'] for t in transactions if t['transaction_type'] == 'withdrawal')
+        total_transfers = sum(t['amount'] for t in transactions if t['transaction_type'] == 'transfer')
+        
+        # Group transactions by account
+        account_breakdown = {}
+        for account in accounts:
+            account_id = account['id']
+            account_transactions = [t for t in transactions if 
+                                  t.get('account_id') == account_id or 
+                                  t.get('from_account_id') == account_id or 
+                                  t.get('to_account_id') == account_id]
             
-        accounts = response.json().get('accounts', [])
+            account_breakdown[account_id] = {
+                'account': account,
+                'transaction_count': len(account_transactions),
+                'transactions': account_transactions
+            }
         
-    except requests.RequestException:
-        return jsonify({'message': 'Account service unavailable'}), 503
-    
-    # Get all transactions for the user
-    try:
-        response = requests.get(
-            f"{TRANSACTION_SERVICE_URL}/api/transactions/list",
-            headers={'Authorization': f'Bearer {token}'}
-        )
+        # Group transactions by type
+        transaction_types = {}
+        for t in transactions:
+            t_type = t['transaction_type']
+            if t_type not in transaction_types:
+                transaction_types[t_type] = {'count': 0, 'total_amount': 0}
+            transaction_types[t_type]['count'] += 1
+            transaction_types[t_type]['total_amount'] += t['amount']
         
-        if not response.ok:
-            return jsonify({'message': 'Failed to retrieve transactions'}), response.status_code
-            
-        transactions = response.json().get('transactions', [])
-        
-    except requests.RequestException:
-        return jsonify({'message': 'Transaction service unavailable'}), 503
-    
-    # Filter transactions by date
-    filtered_transactions = filter_transactions_by_date(transactions, start_date, end_date)
-    
-    # Calculate summary statistics
-    summary = calculate_summary(filtered_transactions)
-    
-    # Create report
-    report_data = {
-        'accounts': accounts,
-        'period': {
-            'start_date': start_date.isoformat(),
-            'end_date': end_date.isoformat()
-        },
-        'summary': summary,
-        'transactions': filtered_transactions
-    }
-    
-    # Save report
-    with app.app_context():
-        report = Report(
-            user_id=current_user['user_id'],
-            report_type='transaction',
-            title=f"Transaction Report",
-            description=f"Transaction report from {start_date.isoformat()} to {end_date.isoformat()}",
-            parameters={
+        # Generate report data
+        report_data = {
+            'user_id': current_user['user_id'],
+            'username': current_user['username'],
+            'period': {
                 'start_date': start_date.isoformat(),
                 'end_date': end_date.isoformat()
             },
-            report_data=report_data
-        )
+            'summary': {
+                'total_accounts': len(accounts),
+                'total_transactions': total_transactions,
+                'total_deposits': total_deposits,
+                'total_withdrawals': total_withdrawals,
+                'total_transfers': total_transfers,
+                'total_balance': sum(account['balance'] for account in accounts)
+            },
+            'transaction_breakdown': transaction_types,
+            'account_breakdown': account_breakdown,
+            'transactions': transactions
+        }
         
-        db.session.add(report)
-        db.session.commit()
+        # Save report
+        parameters = {
+            'start_date': start_date.isoformat(),
+            'end_date': end_date.isoformat()
+        }
+        
+        title = f"Transaction Report - {current_user['username']}"
+        description = f"Cross-account transaction report for {current_user['username']} from {start_date.strftime('%Y-%m-%d')} to {end_date.strftime('%Y-%m-%d')}"
+        
+        report = save_report(current_user['user_id'], 'transactions', title, description, parameters, report_data)
         
         return jsonify({
-            'report': report.to_dict()
+            'report_id': report.id,
+            'report': report_data
         }), 200
+        
+    except ValueError as e:
+        return jsonify({'message': str(e)}), 400
+    except Exception as e:
+        logger.error(f"Error generating transaction report: {str(e)}")
+        return jsonify({'message': 'Internal server error'}), 500
 
 @app.route('/api/reports/system', methods=['GET'])
 @token_required
 @admin_required
-def system_report(current_user):
+def generate_system_report(current_user):
     """Generate system-wide report (admin only)"""
-    # Get parameters
-    start_date_str = request.args.get('start_date')
-    end_date_str = request.args.get('end_date')
-    
-    # Parse dates
-    start_date = parse_date(start_date_str) if start_date_str else (datetime.now() - timedelta(days=30)).date()
-    end_date = parse_date(end_date_str) if end_date_str else datetime.now().date()
-    
-    # Get all users
     try:
-        token = request.headers.get('Authorization').split(' ')[1]
-        response = requests.get(
-            f"{AUTH_SERVICE_URL}/api/auth/users",
-            headers={'Authorization': f'Bearer {token}'}
-        )
+        # Get query parameters
+        start_date_str = request.args.get('start_date')
+        end_date_str = request.args.get('end_date')
         
-        if not response.ok:
-            return jsonify({'message': 'Failed to retrieve users'}), response.status_code
-            
-        users = response.json().get('users', [])
+        # Set default date range (last 30 days)
+        end_date = parse_date(end_date_str) if end_date_str else datetime.now()
+        start_date = parse_date(start_date_str) if start_date_str else end_date - timedelta(days=30)
         
-    except requests.RequestException:
-        return jsonify({'message': 'Auth service unavailable'}), 503
-    
-    # Get all accounts
-    try:
-        response = requests.get(
-            f"{ACCOUNT_SERVICE_URL}/api/accounts/all",
-            headers={'Authorization': f'Bearer {token}'}
-        )
+        auth_header = request.headers.get('Authorization')
         
-        if not response.ok:
-            return jsonify({'message': 'Failed to retrieve accounts'}), response.status_code
-            
-        accounts = response.json().get('accounts', [])
+        # Get system-wide data
+        users = get_all_users(auth_header)
+        accounts = get_all_accounts(auth_header)
+        transactions = get_all_transactions(auth_header)
         
-    except requests.RequestException:
-        return jsonify({'message': 'Account service unavailable'}), 503
-    
-    # Get all transactions
-    try:
-        response = requests.get(
-            f"{TRANSACTION_SERVICE_URL}/api/transactions/all",
-            headers={'Authorization': f'Bearer {token}'}
-        )
+        # Filter transactions by date
+        filtered_transactions = []
+        for t in transactions:
+            try:
+                t_date = datetime.fromisoformat(t['timestamp'].replace('Z', '+00:00')).replace(tzinfo=None)
+                if start_date <= t_date <= end_date:
+                    filtered_transactions.append(t)
+            except:
+                continue
         
-        if not response.ok:
-            return jsonify({'message': 'Failed to retrieve transactions'}), response.status_code
-            
-        transactions = response.json().get('transactions', [])
+        # Calculate system statistics
+        total_users = len(users)
+        active_users = len([u for u in users if u.get('status') == 'active'])
+        total_accounts = len(accounts)
+        active_accounts = len([a for a in accounts if a.get('status') == 'active'])
+        closed_accounts = len([a for a in accounts if a.get('status') == 'closed'])
         
-    except requests.RequestException:
-        return jsonify({'message': 'Transaction service unavailable'}), 503
-    
-    # Filter transactions by date
-    filtered_transactions = filter_transactions_by_date(transactions, start_date, end_date)
-    
-    # Calculate summary statistics
-    transaction_summary = calculate_summary(filtered_transactions)
-    
-    # Calculate additional system stats
-    system_stats = {
-        'total_users': len(users),
-        'total_accounts': len(accounts),
-        'total_balance': sum(a['balance'] for a in accounts),
-        'active_accounts': sum(1 for a in accounts if a['status'] == 'active'),
-        'closed_accounts': sum(1 for a in accounts if a['status'] == 'closed'),
-        'account_types': {}
-    }
-    
-    # Count by account type
-    for a in accounts:
-        a_type = a['account_type']
-        if a_type not in system_stats['account_types']:
-            system_stats['account_types'][a_type] = {
-                'count': 0,
-                'balance': 0
-            }
-        system_stats['account_types'][a_type]['count'] += 1
-        system_stats['account_types'][a_type]['balance'] += a['balance']
-    
-    # Create report
-    report_data = {
-        'period': {
-            'start_date': start_date.isoformat(),
-            'end_date': end_date.isoformat()
-        },
-        'system_stats': system_stats,
-        'transaction_summary': transaction_summary
-    }
-    
-    # Save report
-    with app.app_context():
-        report = Report(
-            user_id=current_user['user_id'],
-            report_type='system',
-            title=f"System Report",
-            description=f"System-wide report from {start_date.isoformat()} to {end_date.isoformat()}",
-            parameters={
+        # Account type distribution
+        account_types = {}
+        for account in accounts:
+            a_type = account.get('account_type', 'unknown')
+            if a_type not in account_types:
+                account_types[a_type] = {'count': 0, 'total_balance': 0}
+            account_types[a_type]['count'] += 1
+            account_types[a_type]['total_balance'] += account.get('balance', 0)
+        
+        # Transaction statistics
+        total_transactions = len(filtered_transactions)
+        total_transaction_volume = sum(t.get('amount', 0) for t in filtered_transactions)
+        
+        # Transaction type breakdown
+        transaction_types = {}
+        for t in filtered_transactions:
+            t_type = t.get('transaction_type', 'unknown')
+            if t_type not in transaction_types:
+                transaction_types[t_type] = {'count': 0, 'total_amount': 0}
+            transaction_types[t_type]['count'] += 1
+            transaction_types[t_type]['total_amount'] += t.get('amount', 0)
+        
+        # Financial metrics
+        total_system_balance = sum(account.get('balance', 0) for account in accounts if account.get('status') == 'active')
+        
+        # Generate report data
+        report_data = {
+            'period': {
                 'start_date': start_date.isoformat(),
                 'end_date': end_date.isoformat()
             },
-            report_data=report_data
-        )
+            'user_statistics': {
+                'total_users': total_users,
+                'active_users': active_users,
+                'inactive_users': total_users - active_users
+            },
+            'account_statistics': {
+                'total_accounts': total_accounts,
+                'active_accounts': active_accounts,
+                'closed_accounts': closed_accounts,
+                'account_type_distribution': account_types,
+                'total_system_balance': total_system_balance
+            },
+            'transaction_statistics': {
+                'total_transactions': total_transactions,
+                'total_transaction_volume': total_transaction_volume,
+                'transaction_type_breakdown': transaction_types,
+                'average_transaction_amount': total_transaction_volume / total_transactions if total_transactions > 0 else 0
+            },
+            'system_health': {
+                'accounts_per_user': total_accounts / total_users if total_users > 0 else 0,
+                'transactions_per_account': total_transactions / total_accounts if total_accounts > 0 else 0,
+                'average_account_balance': total_system_balance / active_accounts if active_accounts > 0 else 0
+            }
+        }
         
-        db.session.add(report)
-        db.session.commit()
+        # Save report
+        parameters = {
+            'start_date': start_date.isoformat(),
+            'end_date': end_date.isoformat()
+        }
+        
+        title = f"System Report"
+        description = f"System-wide statistics and analytics from {start_date.strftime('%Y-%m-%d')} to {end_date.strftime('%Y-%m-%d')}"
+        
+        report = save_report(current_user['user_id'], 'system', title, description, parameters, report_data)
         
         return jsonify({
-            'report': report.to_dict()
+            'report_id': report.id,
+            'report': report_data
         }), 200
+        
+    except ValueError as e:
+        return jsonify({'message': str(e)}), 400
+    except Exception as e:
+        logger.error(f"Error generating system report: {str(e)}")
+        return jsonify({'message': 'Internal server error'}), 500
 
 @app.route('/api/reports/list', methods=['GET'])
 @token_required
-def list_reports(current_user):
-    """List reports for the current user"""
-    with app.app_context():
-        reports = Report.query.filter_by(user_id=current_user['user_id']).order_by(Report.created_at.desc()).all()
-        return jsonify({
-            'reports': [report.to_dict() for report in reports]
-        }), 200
+def list_user_reports(current_user):
+    """List user's historical reports"""
+    try:
+        with app.app_context():
+            reports = Report.query.filter_by(user_id=current_user['user_id']).order_by(Report.created_at.desc()).all()
+            
+            return jsonify({
+                'reports': [
+                    {
+                        'id': report.id,
+                        'report_type': report.report_type,
+                        'title': report.title,
+                        'description': report.description,
+                        'created_at': report.created_at.isoformat(),
+                        'status': report.status
+                    } for report in reports
+                ]
+            }), 200
+            
+    except Exception as e:
+        logger.error(f"Error listing user reports: {str(e)}")
+        return jsonify({'message': 'Internal server error'}), 500
 
 @app.route('/api/reports/details/<report_id>', methods=['GET'])
 @token_required
-def report_details(current_user, report_id):
-    """Get details of a specific report"""
-    with app.app_context():
-        report = Report.query.filter_by(id=report_id).first()
-        
-        if not report:
-            return jsonify({'message': 'Report not found'}), 404
-        
-        # Check if the report belongs to the current user or user is admin
-        if report.user_id != current_user['user_id'] and current_user['role'] != 'admin':
-            return jsonify({'message': 'Access denied'}), 403
+def get_report_details(current_user, report_id):
+    """Retrieve specific report details"""
+    try:
+        with app.app_context():
+            report = Report.query.filter_by(id=report_id).first()
             
-        return jsonify(report.to_dict()), 200
+            if not report:
+                return jsonify({'message': 'Report not found'}), 404
+            
+            # Check if the report belongs to the current user (unless admin)
+            if report.user_id != current_user['user_id'] and current_user['role'] != 'admin':
+                return jsonify({'message': 'Access denied'}), 403
+            
+            return jsonify(report.to_dict()), 200
+            
+    except Exception as e:
+        logger.error(f"Error getting report details: {str(e)}")
+        return jsonify({'message': 'Internal server error'}), 500
 
 @app.route('/api/reports/all', methods=['GET'])
 @token_required
 @admin_required
-def all_reports(current_user):
-    """Get all reports (admin only)"""
-    with app.app_context():
-        reports = Report.query.order_by(Report.created_at.desc()).all()
-        return jsonify({
-            'reports': [report.to_dict() for report in reports]
-        }), 200
+def list_all_reports(current_user):
+    """List all system reports (admin only)"""
+    try:
+        with app.app_context():
+            reports = Report.query.order_by(Report.created_at.desc()).all()
+            
+            return jsonify({
+                'reports': [
+                    {
+                        'id': report.id,
+                        'user_id': report.user_id,
+                        'report_type': report.report_type,
+                        'title': report.title,
+                        'description': report.description,
+                        'created_at': report.created_at.isoformat(),
+                        'status': report.status
+                    } for report in reports
+                ]
+            }), 200
+            
+    except Exception as e:
+        logger.error(f"Error listing all reports: {str(e)}")
+        return jsonify({'message': 'Internal server error'}), 500
 
 if __name__ == '__main__':
     app.run(debug=True, host='localhost', port=8004)

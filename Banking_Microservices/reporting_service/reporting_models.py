@@ -1,10 +1,8 @@
 import os
 import uuid
-import json
 from datetime import datetime
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy.orm import DeclarativeBase
-from sqlalchemy import Column, String, DateTime, JSON
 
 class Base(DeclarativeBase):
     pass
@@ -18,11 +16,12 @@ class Report(db.Model):
     id = db.Column(db.String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     user_id = db.Column(db.String(36), nullable=False, index=True)
     report_type = db.Column(db.String(50), nullable=False)
-    title = db.Column(db.String(100), nullable=False)
-    description = db.Column(db.String(255))
-    parameters = db.Column(JSON, default={})
-    report_data = db.Column(JSON, default={})
+    title = db.Column(db.String(200), nullable=False)
+    description = db.Column(db.String(500))
+    parameters = db.Column(db.JSON)  # Store report parameters as JSON
+    data = db.Column(db.JSON)  # Store report data as JSON
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    status = db.Column(db.String(20), default='completed')
     
     def to_dict(self):
         """Convert Report object to dictionary"""
@@ -33,6 +32,7 @@ class Report(db.Model):
             'title': self.title,
             'description': self.description,
             'parameters': self.parameters,
-            'report_data': self.report_data,
-            'created_at': self.created_at.isoformat()
+            'data': self.data,
+            'created_at': self.created_at.isoformat(),
+            'status': self.status
         }
