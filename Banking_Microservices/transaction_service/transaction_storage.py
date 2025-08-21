@@ -1,116 +1,112 @@
 import os
 import json
-import logging
-from pathlib import Path
-
-logger = logging.getLogger(__name__)
+import uuid
+from datetime import datetime
+from typing import List, Optional, Dict
 
 class TransactionStorage:
-    """Storage handler for transaction service"""
+    """File-based storage for transactions (legacy compatibility)"""
     
-    def __init__(self, data_dir='./data'):
-        """Initialize storage with data directory"""
+    def __init__(self, data_dir: str = "data"):
         self.data_dir = data_dir
-        self.transactions_file = f"{data_dir}/transactions.json"
-        
-        # Create data directory if it doesn't exist
-        os.makedirs(data_dir, exist_ok=True)
-        
-        # Create transactions file if it doesn't exist
-        if not os.path.exists(self.transactions_file):
-            with open(self.transactions_file, 'w') as f:
-                json.dump([], f)
+        self.transactions_file = os.path.join(data_dir, "transactions.json")
+        self._ensure_directory()
+        self._load_transactions()
     
-    def get_all_transactions(self):
-        """Get all transactions from storage"""
+    def _ensure_directory(self):
+        """Ensure the data directory exists"""
+        if not os.path.exists(self.data_dir):
+            os.makedirs(self.data_dir)
+    
+    def _load_transactions(self):
+        """Load transactions from file"""
+        if os.path.exists(self.transactions_file):
+            try:
+                with open(self.transactions_file, 'r') as f:
+                    self.transactions = json.load(f)
+            except (json.JSONDecodeError, IOError):
+                self.transactions = []
+        else:
+            self.transactions = []
+    
+    def _save_transactions(self):
+        """Save transactions to file"""
         try:
-            with open(self.transactions_file, 'r') as f:
-                return json.load(f)
-        except Exception as e:
-            logger.error(f"Error reading transactions file: {e}")
-            return []
+            with open(self.transactions_file, 'w') as f:
+                json.dump(self.transactions, f, indent=2, default=str)
+        except IOError as e:
+            raise Exception(f"Failed to save transactions: {str(e)}")
     
-    def get_transaction(self, transaction_id):
-        """Get transaction by ID"""
-        transactions = self.get_all_transactions()
+    def create_transaction(self, transaction_data: Dict) -> Dict:
+        """Create a new transaction"""
+        transaction = {
+            'id': str(uuid.uuid4()),
+            'user_id': transaction_data['user_id'],
+            'account_id': transaction_data.get('account_id'),
+            'from_account_id': transaction_data.get('from_account_id'),
+            'to_account_id': transaction_data.get('to_account_id'),
+            'transaction_type': transaction_data['transaction_type'],
+            'transfer_type': transaction_data.get('transfer_type'),
+            'amount': transaction_data['amount'],
+            'description': transaction_data.get('description', ''),
+            'status': transaction_data.get('status', 'completed'),
+            'timestamp': datetime.utcnow().isoformat(),
+            'reference_number': f"TXN{uuid.uuid4().hex[:16].upper()}"
+        }
         
-        for transaction in transactions:
+        self.transactions.append(transaction)
+        self._save_transactions()
+        return transaction
+    
+    def get_transaction(self, transaction_id: str) -> Optional[Dict]:
+        """Get a transaction by ID"""
+        for transaction in self.transactions:
             if transaction['id'] == transaction_id:
                 return transaction
-        
         return None
     
-    def get_transactions_by_account_id(self, account_id):
-        """Get all transactions for a specific account"""
-        transactions = self.get_all_transactions()
+    def get_transactions_by_user(self, user_id: str, limit: Optional[int] = None) -> List[Dict]:
+        """Get all transactions for a user"""
+        user_transactions = [
+            t for t in self.transactions 
+            if t['user_id'] == user_id
+        ]
         
-        # Filter transactions by account_id
-        # For both direct account transactions and transfers
-        account_transactions = []
+        # Sort by timestamp (newest first)
+        user_transactions.sort(key=lambda x: x['timestamp'], reverse=True)
         
-        for transaction in transactions:
-            if transaction.get('transaction_type') in ['deposit', 'withdrawal']:
-                if transaction.get('account_id') == account_id:
-                    account_transactions.append(transaction)
-            elif transaction.get('transaction_type') == 'transfer':
-                if transaction.get('from_account_id') == account_id or transaction.get('to_account_id') == account_id:
-                    account_transactions.append(transaction)
+        if limit:
+            return user_transactions[:limit]
+        return user_transactions
+    
+    def get_transactions_by_account(self, account_id: str) -> List[Dict]:
+        """Get all transactions for an account"""
+        account_transactions = [
+            t for t in self.transactions 
+            if (t.get('account_id') == account_id or 
+                t.get('from_account_id') == account_id or 
+                t.get('to_account_id') == account_id)
+        ]
         
+        # Sort by timestamp (newest first)
+        account_transactions.sort(key=lambda x: x['timestamp'], reverse=True)
         return account_transactions
     
-    def create_transaction(self, transaction_data):
-        """Create a new transaction"""
-        transactions = self.get_all_transactions()
-        
-        # Check for duplicate ID
-        for transaction in transactions:
-            if transaction['id'] == transaction_data['id']:
-                return False
-        
-        transactions.append(transaction_data)
-        
-        try:
-            with open(self.transactions_file, 'w') as f:
-                json.dump(transactions, f, indent=2)
-            return True
-        except Exception as e:
-            logger.error(f"Error writing transaction data: {e}")
-            return False
+    def get_all_transactions(self) -> List[Dict]:
+        """Get all transactions (admin only)"""
+        # Sort by timestamp (newest first)
+        all_transactions = sorted(self.transactions, key=lambda x: x['timestamp'], reverse=True)
+        return all_transactions
     
-    def update_transaction(self, transaction_id, update_data):
-        """Update an existing transaction"""
-        transactions = self.get_all_transactions()
-        
-        for i, transaction in enumerate(transactions):
+    def update_transaction_status(self, transaction_id: str, status: str) -> Optional[Dict]:
+        """Update transaction status"""
+        for transaction in self.transactions:
             if transaction['id'] == transaction_id:
-                # Update fields
-                for key, value in update_data.items():
-                    transactions[i][key] = value
-                
-                try:
-                    with open(self.transactions_file, 'w') as f:
-                        json.dump(transactions, f, indent=2)
-                    return True
-                except Exception as e:
-                    logger.error(f"Error updating transaction data: {e}")
-                    return False
-        
-        return False
+                transaction['status'] = status
+                self._save_transactions()
+                return transaction
+        return None
     
-    def delete_transaction(self, transaction_id):
-        """Delete a transaction"""
-        transactions = self.get_all_transactions()
-        
-        for i, transaction in enumerate(transactions):
-            if transaction['id'] == transaction_id:
-                transactions.pop(i)
-                
-                try:
-                    with open(self.transactions_file, 'w') as f:
-                        json.dump(transactions, f, indent=2)
-                    return True
-                except Exception as e:
-                    logger.error(f"Error deleting transaction data: {e}")
-                    return False
-        
-        return False
+    def get_recent_transactions(self, user_id: str, limit: int = 10) -> List[Dict]:
+        """Get recent transactions for a user"""
+        return self.get_transactions_by_user(user_id, limit)

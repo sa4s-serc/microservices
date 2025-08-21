@@ -1,28 +1,17 @@
-import consul
 import os
+import consul
 import logging
-import requests
 import jwt
+import requests
 from datetime import datetime
 from functools import wraps
 from flask import Flask, request, jsonify
 from transaction_service.transaction_models import db, Transaction
+from transaction_service.transaction_storage import TransactionStorage
 
 # Configure logging
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
-
-# Initialize Flask app
-app = Flask(__name__)
-app.config["SQLALCHEMY_DATABASE_URI"] = os.environ.get("TRANSACTION_DATABASE_URL")
-app.config["JWT_SECRET_KEY"] = os.environ.get("SESSION_SECRET", "transaction_service_secret_key")
-
-# Initialize extensions
-db.init_app(app)
-
-# Create tables
-with app.app_context():
-    db.create_all()
 
 # Consul configuration
 CONSUL_HOST = os.environ.get("CONSUL_HOST", "localhost")
@@ -54,6 +43,18 @@ def deregister_service():
     consul_client.agent.service.deregister(SERVICE_ID)
     logger.info(f"Deregistered service from Consul: {SERVICE_ID}")
 
+# Initialize Flask app
+app = Flask(__name__)
+app.config["SQLALCHEMY_DATABASE_URI"] = os.environ.get("TRANSACTION_DATABASE_URL")
+app.config["JWT_SECRET_KEY"] = os.environ.get("SESSION_SECRET", "transaction_service_secret_key")
+
+# Initialize extensions
+db.init_app(app)
+
+# Create tables
+with app.app_context():
+    db.create_all()
+
 # Register service on startup (unless disabled)
 if not os.environ.get("DISABLE_CONSUL", "false").lower() == "true":
     with app.app_context():
@@ -63,6 +64,9 @@ if not os.environ.get("DISABLE_CONSUL", "false").lower() == "true":
 import atexit
 if not os.environ.get("DISABLE_CONSUL", "false").lower() == "true":
     atexit.register(deregister_service)
+
+# Initialize legacy storage for compatibility
+storage = TransactionStorage()
 
 # Service URLs
 AUTH_SERVICE_URL = os.environ.get("AUTH_SERVICE_URL", "http://localhost:8001")
@@ -128,492 +132,357 @@ def admin_required(f):
     
     return decorated
 
+def validate_account_ownership(account_id, user_id, token):
+    """Validate that the account belongs to the user"""
+    try:
+        response = requests.get(
+            f"{ACCOUNT_SERVICE_URL}/api/accounts/details/{account_id}",
+            headers={'Authorization': f'Bearer {token}'}
+        )
+        if not response.ok:
+            return False, "Account not found"
+        
+        account_data = response.json()
+        if account_data['user_id'] != user_id:
+            return False, "Access denied"
+        
+        return True, account_data
+    except requests.RequestException:
+        return False, "Account service unavailable"
+
+def validate_account_exists(account_id):
+    """Validate that an account exists and is active"""
+    try:
+        response = requests.get(f"{ACCOUNT_SERVICE_URL}/api/accounts/validate/{account_id}")
+        if response.ok:
+            result = response.json()
+            return result.get('valid', False), result.get('message', ''), result.get('account')
+        return False, "Account validation failed", None
+    except requests.RequestException:
+        return False, "Account service unavailable", None
+
+def update_account_balance(account_id, amount, operation):
+    """Update account balance through account service"""
+    try:
+        response = requests.post(
+            f"{ACCOUNT_SERVICE_URL}/api/accounts/balance/update",
+            json={
+                'account_id': account_id,
+                'amount': amount,
+                'operation': operation
+            }
+        )
+        return response.ok, response.json() if response.ok else response.text
+    except requests.RequestException:
+        return False, "Account service unavailable"
+
 # Routes
 @app.route('/api/health', methods=['GET'])
 def health_check():
     """Health check endpoint"""
     return jsonify({'status': 'healthy', 'service': 'transaction-service'}), 200
 
+@app.route('/api/transactions/deposit', methods=['POST'])
+@token_required
+def create_deposit(current_user):
+    """Process a deposit transaction"""
+    data = request.json
+    
+    # Validate required fields
+    required_fields = ['account_id', 'amount']
+    if not all(field in data for field in required_fields):
+        return jsonify({'message': 'Missing required fields: account_id, amount'}), 400
+    
+    account_id = data['account_id']
+    amount = data['amount']
+    description = data.get('description', 'Deposit')
+    
+    # Validate amount
+    try:
+        amount = float(amount)
+        if amount <= 0:
+            return jsonify({'message': 'Amount must be positive'}), 400
+    except (ValueError, TypeError):
+        return jsonify({'message': 'Invalid amount'}), 400
+    
+    # Validate account ownership
+    token = request.headers.get('Authorization').split(' ')[1]
+    is_valid, account_data = validate_account_ownership(account_id, current_user['user_id'], token)
+    if not is_valid:
+        return jsonify({'message': account_data}), 403
+    
+    # Update account balance
+    success, result = update_account_balance(account_id, amount, 'credit')
+    if not success:
+        return jsonify({'message': f'Failed to update balance: {result}'}), 400
+    
+    # Create transaction record
+    with app.app_context():
+        transaction = Transaction(
+            user_id=current_user['user_id'],
+            account_id=account_id,
+            transaction_type='deposit',
+            amount=amount,
+            description=description,
+            status='completed'
+        )
+        
+        db.session.add(transaction)
+        db.session.commit()
+        
+        return jsonify({
+            'message': 'Deposit processed successfully',
+            'transaction': transaction.to_dict()
+        }), 201
+
+@app.route('/api/transactions/withdraw', methods=['POST'])
+@token_required
+def create_withdrawal(current_user):
+    """Process a withdrawal transaction"""
+    data = request.json
+    
+    # Validate required fields
+    required_fields = ['account_id', 'amount']
+    if not all(field in data for field in required_fields):
+        return jsonify({'message': 'Missing required fields: account_id, amount'}), 400
+    
+    account_id = data['account_id']
+    amount = data['amount']
+    description = data.get('description', 'Withdrawal')
+    
+    # Validate amount
+    try:
+        amount = float(amount)
+        if amount <= 0:
+            return jsonify({'message': 'Amount must be positive'}), 400
+    except (ValueError, TypeError):
+        return jsonify({'message': 'Invalid amount'}), 400
+    
+    # Validate account ownership
+    token = request.headers.get('Authorization').split(' ')[1]
+    is_valid, account_data = validate_account_ownership(account_id, current_user['user_id'], token)
+    if not is_valid:
+        return jsonify({'message': account_data}), 403
+    
+    # Update account balance (debit operation will check sufficient funds)
+    success, result = update_account_balance(account_id, amount, 'debit')
+    if not success:
+        return jsonify({'message': f'Failed to process withdrawal: {result}'}), 400
+    
+    # Create transaction record
+    with app.app_context():
+        transaction = Transaction(
+            user_id=current_user['user_id'],
+            account_id=account_id,
+            transaction_type='withdrawal',
+            amount=amount,
+            description=description,
+            status='completed'
+        )
+        
+        db.session.add(transaction)
+        db.session.commit()
+        
+        return jsonify({
+            'message': 'Withdrawal processed successfully',
+            'transaction': transaction.to_dict()
+        }), 201
+
+@app.route('/api/transactions/transfer', methods=['POST'])
+@token_required
+def create_transfer(current_user):
+    """Process a transfer transaction"""
+    data = request.json
+    
+    # Validate required fields
+    required_fields = ['from_account_id', 'to_account_id', 'amount']
+    if not all(field in data for field in required_fields):
+        return jsonify({'message': 'Missing required fields: from_account_id, to_account_id, amount'}), 400
+    
+    from_account_id = data['from_account_id']
+    to_account_id = data['to_account_id']
+    amount = data['amount']
+    description = data.get('description', 'Transfer')
+    
+    # Validate amount
+    try:
+        amount = float(amount)
+        if amount <= 0:
+            return jsonify({'message': 'Amount must be positive'}), 400
+    except (ValueError, TypeError):
+        return jsonify({'message': 'Invalid amount'}), 400
+    
+    # Check if transferring to the same account
+    if from_account_id == to_account_id:
+        return jsonify({'message': 'Cannot transfer to the same account'}), 400
+    
+    # Validate source account ownership
+    token = request.headers.get('Authorization').split(' ')[1]
+    is_valid, from_account_data = validate_account_ownership(from_account_id, current_user['user_id'], token)
+    if not is_valid:
+        return jsonify({'message': f'Source account: {from_account_data}'}), 403
+    
+    # Validate destination account exists
+    to_valid, to_message, to_account_data = validate_account_exists(to_account_id)
+    if not to_valid:
+        return jsonify({'message': f'Destination account: {to_message}'}), 400
+    
+    # Determine transfer type
+    transfer_type = 'internal' if to_account_data['user_id'] == current_user['user_id'] else 'external'
+    
+    # Process the transfer (two-phase operation)
+    try:
+        # Phase 1: Debit from source account
+        success, result = update_account_balance(from_account_id, amount, 'debit')
+        if not success:
+            return jsonify({'message': f'Transfer failed: {result}'}), 400
+        
+        # Phase 2: Credit to destination account
+        success, result = update_account_balance(to_account_id, amount, 'credit')
+        if not success:
+            # Rollback: Credit back to source account
+            rollback_success, _ = update_account_balance(from_account_id, amount, 'credit')
+            if not rollback_success:
+                logger.error(f"CRITICAL: Failed to rollback transfer for account {from_account_id}")
+            return jsonify({'message': f'Transfer failed during credit phase: {result}'}), 400
+        
+        # Create transaction record
+        with app.app_context():
+            transaction = Transaction(
+                user_id=current_user['user_id'],
+                from_account_id=from_account_id,
+                to_account_id=to_account_id,
+                transaction_type='transfer',
+                transfer_type=transfer_type,
+                amount=amount,
+                description=description,
+                status='completed'
+            )
+            
+            db.session.add(transaction)
+            db.session.commit()
+            
+            return jsonify({
+                'message': 'Transfer processed successfully',
+                'transaction': transaction.to_dict()
+            }), 201
+            
+    except Exception as e:
+        logger.error(f"Transfer error: {str(e)}")
+        return jsonify({'message': 'Transfer failed due to internal error'}), 500
+
 @app.route('/api/transactions/list', methods=['GET'])
 @token_required
 def list_transactions(current_user):
-    """List all transactions for the current user"""
-    # First get all accounts for the user
-    try:
-        token = request.headers.get('Authorization').split(' ')[1]
-        response = requests.get(
-            f"{ACCOUNT_SERVICE_URL}/api/accounts/list",
-            headers={'Authorization': f'Bearer {token}'}
-        )
-        
-        if not response.ok:
-            return jsonify({'message': 'Failed to retrieve accounts'}), response.status_code
-            
-        accounts = response.json().get('accounts', [])
-        account_ids = [account['id'] for account in accounts]
-        
-    except requests.RequestException:
-        return jsonify({'message': 'Account service unavailable'}), 503
+    """Get all transactions for the current user"""
+    limit = request.args.get('limit', type=int)
     
-    # Now get transactions for these accounts
     with app.app_context():
-        # Query for deposit/withdrawal transactions
-        deposit_withdrawal_transactions = Transaction.query.filter(
-            Transaction.transaction_type.in_(['deposit', 'withdrawal']),
-            Transaction.account_id.in_(account_ids)
-        ).all()
+        query = Transaction.query.filter_by(user_id=current_user['user_id']).order_by(Transaction.timestamp.desc())
         
-        # Query for transfer transactions
-        transfer_transactions = Transaction.query.filter(
-            Transaction.transaction_type == 'transfer',
-            (Transaction.from_account_id.in_(account_ids) | Transaction.to_account_id.in_(account_ids))
-        ).all()
-        
-        # Combine and sort by timestamp (descending)
-        all_transactions = deposit_withdrawal_transactions + transfer_transactions
-        all_transactions.sort(key=lambda x: x.timestamp, reverse=True)
+        if limit:
+            transactions = query.limit(limit).all()
+        else:
+            transactions = query.all()
         
         return jsonify({
-            'transactions': [transaction.to_dict() for transaction in all_transactions]
+            'transactions': [transaction.to_dict() for transaction in transactions]
         }), 200
 
 @app.route('/api/transactions/recent', methods=['GET'])
 @token_required
-def recent_transactions(current_user):
+def get_recent_transactions(current_user):
     """Get recent transactions for the current user"""
-    limit = int(request.args.get('limit', 5))
+    limit = request.args.get('limit', default=10, type=int)
     
-    # First get all accounts for the user
-    try:
-        token = request.headers.get('Authorization').split(' ')[1]
-        response = requests.get(
-            f"{ACCOUNT_SERVICE_URL}/api/accounts/list",
-            headers={'Authorization': f'Bearer {token}'}
-        )
-        
-        if not response.ok:
-            return jsonify({'message': 'Failed to retrieve accounts'}), response.status_code
-            
-        accounts = response.json().get('accounts', [])
-        account_ids = [account['id'] for account in accounts]
-        
-    except requests.RequestException:
-        return jsonify({'message': 'Account service unavailable'}), 503
-    
-    # Now get recent transactions for these accounts
     with app.app_context():
-        # Query for deposit/withdrawal transactions
-        deposit_withdrawal_transactions = Transaction.query.filter(
-            Transaction.transaction_type.in_(['deposit', 'withdrawal']),
-            Transaction.account_id.in_(account_ids)
+        transactions = Transaction.query.filter_by(
+            user_id=current_user['user_id']
         ).order_by(Transaction.timestamp.desc()).limit(limit).all()
-        
-        # Query for transfer transactions
-        transfer_transactions = Transaction.query.filter(
-            Transaction.transaction_type == 'transfer',
-            (Transaction.from_account_id.in_(account_ids) | Transaction.to_account_id.in_(account_ids))
-        ).order_by(Transaction.timestamp.desc()).limit(limit).all()
-        
-        # Combine, sort by timestamp (descending), and limit
-        all_transactions = deposit_withdrawal_transactions + transfer_transactions
-        all_transactions.sort(key=lambda x: x.timestamp, reverse=True)
-        recent_transactions = all_transactions[:limit]
         
         return jsonify({
-            'transactions': [transaction.to_dict() for transaction in recent_transactions]
+            'transactions': [transaction.to_dict() for transaction in transactions]
         }), 200
 
 @app.route('/api/transactions/account/<account_id>', methods=['GET'])
 @token_required
-def account_transactions(current_user, account_id):
-    """Get transactions for a specific account"""
-    # Verify account access
-    try:
-        token = request.headers.get('Authorization').split(' ')[1]
-        response = requests.get(
-            f"{ACCOUNT_SERVICE_URL}/api/accounts/details/{account_id}",
-            headers={'Authorization': f'Bearer {token}'}
-        )
-        
-        if not response.ok:
-            return jsonify({'message': 'Failed to access account'}), response.status_code
-            
-    except requests.RequestException:
-        return jsonify({'message': 'Account service unavailable'}), 503
+def get_account_transactions(current_user, account_id):
+    """Get all transactions for a specific account"""
+    # Validate account ownership
+    token = request.headers.get('Authorization').split(' ')[1]
+    is_valid, account_data = validate_account_ownership(account_id, current_user['user_id'], token)
+    if not is_valid:
+        return jsonify({'message': account_data}), 403
     
-    # Get transactions for this account
     with app.app_context():
-        # Query for deposit/withdrawal transactions
-        deposit_withdrawal_transactions = Transaction.query.filter(
-            Transaction.transaction_type.in_(['deposit', 'withdrawal']),
-            Transaction.account_id == account_id
-        ).all()
-        
-        # Query for transfer transactions
-        transfer_transactions = Transaction.query.filter(
-            Transaction.transaction_type == 'transfer',
-            (Transaction.from_account_id == account_id) | (Transaction.to_account_id == account_id)
-        ).all()
-        
-        # Combine and sort by timestamp (descending)
-        all_transactions = deposit_withdrawal_transactions + transfer_transactions
-        all_transactions.sort(key=lambda x: x.timestamp, reverse=True)
+        transactions = Transaction.query.filter(
+            (Transaction.account_id == account_id) |
+            (Transaction.from_account_id == account_id) |
+            (Transaction.to_account_id == account_id)
+        ).order_by(Transaction.timestamp.desc()).all()
         
         return jsonify({
-            'transactions': [transaction.to_dict() for transaction in all_transactions]
+            'transactions': [transaction.to_dict() for transaction in transactions]
         }), 200
 
 @app.route('/api/transactions/details/<transaction_id>', methods=['GET'])
 @token_required
-def transaction_details(current_user, transaction_id):
-    """Get details of a specific transaction"""
+def get_transaction_details(current_user, transaction_id):
+    """Get detailed information about a specific transaction"""
     with app.app_context():
         transaction = Transaction.query.filter_by(id=transaction_id).first()
         
         if not transaction:
             return jsonify({'message': 'Transaction not found'}), 404
         
-        # Check if the user has access to this transaction
-        # For deposit/withdrawal, check if the account belongs to the user
-        # For transfer, check if either the from or to account belongs to the user
-        
-        # Get user's accounts
-        try:
-            token = request.headers.get('Authorization').split(' ')[1]
-            response = requests.get(
-                f"{ACCOUNT_SERVICE_URL}/api/accounts/list",
-                headers={'Authorization': f'Bearer {token}'}
-            )
-            
-            if not response.ok:
-                return jsonify({'message': 'Failed to retrieve accounts'}), response.status_code
-                
-            accounts = response.json().get('accounts', [])
-            account_ids = [account['id'] for account in accounts]
-            
-            # Check if user has access to the transaction
-            has_access = False
-            if transaction.transaction_type in ['deposit', 'withdrawal']:
-                has_access = transaction.account_id in account_ids
-            elif transaction.transaction_type == 'transfer':
-                has_access = (transaction.from_account_id in account_ids or 
-                              transaction.to_account_id in account_ids)
-            
-            # Admin can access any transaction
-            if current_user['role'] == 'admin':
-                has_access = True
-                
-            if not has_access:
-                return jsonify({'message': 'Access denied'}), 403
-                
-        except requests.RequestException:
-            return jsonify({'message': 'Account service unavailable'}), 503
+        # Check if the transaction belongs to the current user
+        if transaction.user_id != current_user['user_id'] and current_user['role'] != 'admin':
+            return jsonify({'message': 'Access denied'}), 403
         
         return jsonify(transaction.to_dict()), 200
 
-@app.route('/api/transactions/transfer', methods=['POST'])
+@app.route('/api/transactions/all', methods=['GET'])
 @token_required
-def transfer(current_user):
-    """Create a transfer between accounts"""
-    data = request.json
+@admin_required
+def get_all_transactions(current_user):
+    """Get all transactions (admin only)"""
+    limit = request.args.get('limit', type=int)
     
-    # Validate required fields
-    required_fields = ['from_account_id', 'to_account_id', 'amount']
-    if not all(field in data for field in required_fields):
-        return jsonify({'message': 'Missing required fields'}), 400
-    
-    from_account_id = data['from_account_id']
-    to_account_id = data['to_account_id']
-    amount = float(data['amount'])
-    transfer_type = data.get('transfer_type', 'internal')
-    description = data.get('description', '')
-    
-    if amount <= 0:
-        return jsonify({'message': 'Transfer amount must be positive'}), 400
-    
-    if from_account_id == to_account_id:
-        return jsonify({'message': 'Cannot transfer to the same account'}), 400
-    
-    # Verify from_account belongs to the user and has sufficient funds
-    try:
-        token = request.headers.get('Authorization').split(' ')[1]
+    with app.app_context():
+        query = Transaction.query.order_by(Transaction.timestamp.desc())
         
-        # Verify source account
-        response = requests.get(
-            f"{ACCOUNT_SERVICE_URL}/api/accounts/details/{from_account_id}",
-            headers={'Authorization': f'Bearer {token}'}
-        )
+        if limit:
+            transactions = query.limit(limit).all()
+        else:
+            transactions = query.all()
         
-        if not response.ok:
-            return jsonify({'message': 'Source account not accessible'}), response.status_code
-            
-        from_account = response.json()
-        
-        # Verify target account is valid
-        response = requests.get(
-            f"{ACCOUNT_SERVICE_URL}/api/accounts/validate/{to_account_id}"
-        )
-        
-        if not response.ok or not response.json().get('valid', False):
-            return jsonify({'message': 'Target account is invalid or inactive'}), 400
-            
-        # Check if source account has sufficient funds
-        if from_account['balance'] < amount:
-            return jsonify({'message': 'Insufficient funds'}), 400
-            
-        # Process transfer
-        with app.app_context():
-            # Create transaction record
-            transaction = Transaction(
-                transaction_type='transfer',
-                amount=amount,
-                description=description,
-                status='pending',
-                from_account_id=from_account_id,
-                to_account_id=to_account_id,
-                transfer_type=transfer_type
-            )
-            
-            db.session.add(transaction)
-            db.session.commit()
-            
-            # Debit source account
-            response = requests.post(
-                f"{ACCOUNT_SERVICE_URL}/api/accounts/balance/update",
-                json={
-                    'account_id': from_account_id,
-                    'amount': amount,
-                    'operation': 'debit'
-                }
-            )
-            
-            if not response.ok:
-                # Rollback on failure
-                transaction.status = 'failed'
-                db.session.commit()
-                return jsonify({'message': 'Failed to debit source account'}), 500
-                
-            # Credit target account
-            response = requests.post(
-                f"{ACCOUNT_SERVICE_URL}/api/accounts/balance/update",
-                json={
-                    'account_id': to_account_id,
-                    'amount': amount,
-                    'operation': 'credit'
-                }
-            )
-            
-            if not response.ok:
-                # Attempt to refund source account
-                requests.post(
-                    f"{ACCOUNT_SERVICE_URL}/api/accounts/balance/update",
-                    json={
-                        'account_id': from_account_id,
-                        'amount': amount,
-                        'operation': 'credit'
-                    }
-                )
-                
-                transaction.status = 'failed'
-                db.session.commit()
-                return jsonify({'message': 'Failed to credit target account'}), 500
-                
-            # Update transaction status to completed
-            transaction.status = 'completed'
-            db.session.commit()
-            
-            return jsonify({
-                'message': 'Transfer completed successfully',
-                'transaction': transaction.to_dict()
-            }), 201
-            
-    except requests.RequestException:
-        return jsonify({'message': 'Account service unavailable'}), 503
-
-@app.route('/api/transactions/deposit', methods=['POST'])
-@token_required
-def deposit(current_user):
-    """Create a deposit transaction"""
-    data = request.json
-    
-    # Validate required fields
-    required_fields = ['account_id', 'amount']
-    if not all(field in data for field in required_fields):
-        return jsonify({'message': 'Missing required fields'}), 400
-    
-    account_id = data['account_id']
-    amount = float(data['amount'])
-    description = data.get('description', 'Deposit')
-    
-    if amount <= 0:
-        return jsonify({'message': 'Deposit amount must be positive'}), 400
-    
-    # Verify account belongs to the user
-    try:
-        token = request.headers.get('Authorization').split(' ')[1]
-        response = requests.get(
-            f"{ACCOUNT_SERVICE_URL}/api/accounts/details/{account_id}",
-            headers={'Authorization': f'Bearer {token}'}
-        )
-        
-        if not response.ok:
-            return jsonify({'message': 'Account not accessible'}), response.status_code
-            
-        account = response.json()
-        
-        # Process deposit
-        with app.app_context():
-            # Create transaction record
-            transaction = Transaction(
-                transaction_type='deposit',
-                amount=amount,
-                description=description,
-                status='pending',
-                account_id=account_id
-            )
-            
-            db.session.add(transaction)
-            db.session.commit()
-            
-            # Credit account
-            response = requests.post(
-                f"{ACCOUNT_SERVICE_URL}/api/accounts/balance/update",
-                json={
-                    'account_id': account_id,
-                    'amount': amount,
-                    'operation': 'credit'
-                }
-            )
-            
-            if not response.ok:
-                transaction.status = 'failed'
-                db.session.commit()
-                return jsonify({'message': 'Failed to credit account'}), 500
-                
-            # Update transaction status to completed
-            transaction.status = 'completed'
-            db.session.commit()
-            
-            return jsonify({
-                'message': 'Deposit completed successfully',
-                'transaction': transaction.to_dict()
-            }), 201
-            
-    except requests.RequestException:
-        return jsonify({'message': 'Account service unavailable'}), 503
-
-@app.route('/api/transactions/withdraw', methods=['POST'])
-@token_required
-def withdraw(current_user):
-    """Create a withdrawal transaction"""
-    data = request.json
-    
-    # Validate required fields
-    required_fields = ['account_id', 'amount']
-    if not all(field in data for field in required_fields):
-        return jsonify({'message': 'Missing required fields'}), 400
-    
-    account_id = data['account_id']
-    amount = float(data['amount'])
-    description = data.get('description', 'Withdrawal')
-    
-    if amount <= 0:
-        return jsonify({'message': 'Withdrawal amount must be positive'}), 400
-    
-    # Verify account belongs to the user and has sufficient funds
-    try:
-        token = request.headers.get('Authorization').split(' ')[1]
-        response = requests.get(
-            f"{ACCOUNT_SERVICE_URL}/api/accounts/details/{account_id}",
-            headers={'Authorization': f'Bearer {token}'}
-        )
-        
-        if not response.ok:
-            return jsonify({'message': 'Account not accessible'}), response.status_code
-            
-        account = response.json()
-        
-        # Check if account has sufficient funds
-        if account['balance'] < amount:
-            return jsonify({'message': 'Insufficient funds'}), 400
-            
-        # Process withdrawal
-        with app.app_context():
-            # Create transaction record
-            transaction = Transaction(
-                transaction_type='withdrawal',
-                amount=amount,
-                description=description,
-                status='pending',
-                account_id=account_id
-            )
-            
-            db.session.add(transaction)
-            db.session.commit()
-            
-            # Debit account
-            response = requests.post(
-                f"{ACCOUNT_SERVICE_URL}/api/accounts/balance/update",
-                json={
-                    'account_id': account_id,
-                    'amount': amount,
-                    'operation': 'debit'
-                }
-            )
-            
-            if not response.ok:
-                transaction.status = 'failed'
-                db.session.commit()
-                return jsonify({'message': 'Failed to debit account'}), 500
-                
-            # Update transaction status to completed
-            transaction.status = 'completed'
-            db.session.commit()
-            
-            return jsonify({
-                'message': 'Withdrawal completed successfully',
-                'transaction': transaction.to_dict()
-            }), 201
-            
-    except requests.RequestException:
-        return jsonify({'message': 'Account service unavailable'}), 503
+        return jsonify({
+            'transactions': [transaction.to_dict() for transaction in transactions]
+        }), 200
 
 @app.route('/api/transactions/record', methods=['POST'])
 def record_transaction():
-    """Record a transaction (internal use by other services)"""
+    """Internal endpoint for recording transactions (for service-to-service communication)"""
     # This endpoint should be protected in production but is left open for the demo
     data = request.json
     
     # Validate required fields
-    required_fields = ['transaction_type', 'amount']
+    required_fields = ['user_id', 'transaction_type', 'amount']
     if not all(field in data for field in required_fields):
         return jsonify({'message': 'Missing required fields'}), 400
     
-    transaction_type = data['transaction_type']
-    amount = float(data['amount'])
-    
-    # Additional validation based on transaction type
-    if transaction_type in ['deposit', 'withdrawal'] and 'account_id' not in data:
-        return jsonify({'message': 'account_id is required for deposit/withdrawal'}), 400
-        
-    if transaction_type == 'transfer' and ('from_account_id' not in data or 'to_account_id' not in data):
-        return jsonify({'message': 'from_account_id and to_account_id are required for transfer'}), 400
-    
-    # Create transaction record
     with app.app_context():
         transaction = Transaction(
-            transaction_type=transaction_type,
-            amount=amount,
+            user_id=data['user_id'],
+            account_id=data.get('account_id'),
+            from_account_id=data.get('from_account_id'),
+            to_account_id=data.get('to_account_id'),
+            transaction_type=data['transaction_type'],
+            transfer_type=data.get('transfer_type'),
+            amount=data['amount'],
             description=data.get('description', ''),
             status=data.get('status', 'completed')
         )
-        
-        if transaction_type in ['deposit', 'withdrawal']:
-            transaction.account_id = data['account_id']
-        elif transaction_type == 'transfer':
-            transaction.from_account_id = data['from_account_id']
-            transaction.to_account_id = data['to_account_id']
-            transaction.transfer_type = data.get('transfer_type', 'internal')
         
         db.session.add(transaction)
         db.session.commit()
@@ -622,17 +491,6 @@ def record_transaction():
             'message': 'Transaction recorded successfully',
             'transaction': transaction.to_dict()
         }), 201
-
-@app.route('/api/transactions/all', methods=['GET'])
-@token_required
-@admin_required
-def get_all_transactions(current_user):
-    """Get all transactions (admin only)"""
-    with app.app_context():
-        transactions = Transaction.query.order_by(Transaction.timestamp.desc()).all()
-        return jsonify({
-            'transactions': [transaction.to_dict() for transaction in transactions]
-        }), 200
 
 if __name__ == '__main__':
     app.run(debug=True, host='localhost', port=8003)
