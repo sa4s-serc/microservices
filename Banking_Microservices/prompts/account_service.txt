@@ -1,0 +1,60 @@
+MICROSERVICE: account_service
+
+FUNCTIONAL SCOPE:
+- Manages all bank account operations including creation, retrieval, updates, and closure
+- Handles account balance management and validation for transaction processing
+- Provides secure access control ensuring users can only access their own accounts
+- Maintains account lifecycle from creation to closure with proper status management
+
+KEY FEATURES IMPLEMENTED:
+- Multi-type account support (checking, savings, fixed_deposit, investment)
+- Account creation with optional initial deposits and automatic account number generation
+- Balance inquiry and account details retrieval with proper authorization
+- Account closure with business rule validation (zero balance requirement)
+- Admin-only operations for system-wide account management and user account queries
+- Internal APIs for transaction service integration (balance updates, account validation)
+
+API RESPONSIBILITIES:
+- `/api/accounts/list` - Retrieve all accounts for authenticated user
+- `/api/accounts/create` - Create new accounts with type validation and initial deposit handling
+- `/api/accounts/details/{id}` - Get specific account details with ownership verification
+- `/api/accounts/close/{id}` - Close accounts with business rule validation
+- `/api/accounts/all` - Admin endpoint to retrieve all system accounts
+- `/api/accounts/update/{id}` - Admin-only account modification capabilities
+- `/api/accounts/user/{user_id}` - Admin query for specific user's accounts
+- `/api/accounts/balance/update` - Internal API for transaction service balance modifications
+- `/api/accounts/validate/{id}` - Internal API for account existence and status validation
+
+DATA RESPONSIBILITIES:
+- Account entity management with unique ID and account number generation
+- Balance tracking with precision handling for financial calculations
+- Account status lifecycle management (active, closed)
+- User ownership linking and access control enforcement
+- Account type categorization and validation
+- Creation timestamp tracking for audit purposes
+- Referential integrity with user_id from auth service
+
+INTEGRATIONS:
+- Authenticates all requests via Auth Service JWT token verification
+- Provides balance update endpoints consumed by Transaction Service
+- Exposes account validation endpoints for Transaction Service
+- Registers with Consul service discovery for dynamic service location
+- Responds to API Gateway health checks for system monitoring
+
+TECHNICAL APPROACH:
+- Flask-based REST API with SQLAlchemy ORM for data persistence
+- SQLite database with dedicated account.db for service isolation
+- JWT-based authentication with role-based access control (customer/admin)
+- Consul integration for service registration and health monitoring
+- Decorator-based security with token_required and admin_required patterns
+- Database transactions for data consistency during balance operations
+
+IMPLEMENTATION NOTES:
+- Account numbers are auto-generated with "ACC" prefix plus 8-character hex suffix
+- Initial deposits must be non-negative with empty string handling for zero deposits
+- Account closure requires zero balance and active status validation
+- Balance update operations support both credit and debit with insufficient funds checking
+- Internal APIs (balance update, validation) are unprotected for inter-service communication
+- Admin users can access any account while customers are restricted to their own accounts
+- Service runs on port 8002 with environment-configurable database URL
+- Graceful service registration/deregistration with Consul on startup/shutdown

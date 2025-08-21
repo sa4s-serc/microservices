@@ -1,0 +1,64 @@
+MICROSERVICE: transaction_service
+
+FUNCTIONAL SCOPE:
+- Processes and manages all financial transactions in the banking system
+- Handles deposits, withdrawals, and transfers between accounts
+- Maintains complete transaction history and audit trail
+- Provides transaction querying and reporting capabilities
+
+KEY FEATURES IMPLEMENTED:
+- Three core transaction types: deposits, withdrawals, and account-to-account transfers
+- Atomic transaction processing with rollback capabilities for failed operations
+- Real-time balance validation and insufficient funds checking
+- Transaction status tracking (pending, completed, failed)
+- Comprehensive transaction history management
+- Account ownership validation for all operations
+- Admin-level transaction oversight and reporting
+
+API RESPONSIBILITIES:
+- POST /api/transactions/deposit - Process money deposits to accounts
+- POST /api/transactions/withdraw - Process money withdrawals from accounts  
+- POST /api/transactions/transfer - Execute transfers between accounts
+- GET /api/transactions/list - Retrieve user's complete transaction history
+- GET /api/transactions/recent - Get recent transactions with configurable limit
+- GET /api/transactions/account/{id} - Get all transactions for specific account
+- GET /api/transactions/details/{id} - Get detailed transaction information
+- GET /api/transactions/all - Admin endpoint for system-wide transaction access
+- POST /api/transactions/record - Internal endpoint for transaction recording
+- GET /api/health - Service health monitoring
+
+DATA RESPONSIBILITIES:
+- Stores transaction records with UUID identifiers and timestamps
+- Manages transaction metadata: type, amount, description, status
+- Tracks account relationships for deposits/withdrawals (account_id)
+- Maintains transfer relationships (from_account_id, to_account_id, transfer_type)
+- Enforces business rules: positive amounts, valid account ownership
+- Provides transactional consistency through SQLAlchemy database operations
+
+INTEGRATIONS:
+- Auth Service: Validates JWT tokens and user permissions for all operations
+- Account Service: Verifies account ownership, validates account existence, updates balances
+- Uses /api/accounts/details/{id} for account verification
+- Uses /api/accounts/validate/{id} for transfer target validation  
+- Uses /api/accounts/balance/update for atomic balance modifications
+- Reports to Consul service registry for service discovery
+- Integrates with API Gateway through standardized REST endpoints
+
+TECHNICAL APPROACH:
+- Flask-based REST API running on port 8003
+- SQLAlchemy ORM with SQLite database (transaction.db)
+- JWT-based authentication with role-based access control
+- Consul integration for service registration and health monitoring
+- Two-phase transaction processing for transfers with rollback support
+- Request/response error handling with appropriate HTTP status codes
+- Database-first approach with automatic schema creation
+
+IMPLEMENTATION NOTES:
+- Transaction processing follows ACID principles with proper error handling
+- Transfer operations implement compensating transactions for failure scenarios
+- All monetary operations require positive amounts and sufficient funds validation
+- User access control ensures customers can only access their own transactions
+- Admin users have system-wide transaction visibility
+- Service includes both SQLAlchemy database model and legacy file-based storage class
+- Transaction timestamps use UTC for consistency across time zones
+- Includes internal transaction recording endpoint for service-to-service communication

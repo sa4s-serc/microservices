@@ -1,0 +1,59 @@
+MICROSERVICE: reporting_service
+
+FUNCTIONAL SCOPE:
+- Generate financial reports and analytics for banking data
+- Aggregate transaction data from multiple accounts with date filtering
+- Provide system-wide administrative reporting with comprehensive statistics
+- Store and retrieve historical reports for audit trails and user access
+- Calculate financial summaries including transaction counts, amounts, and breakdowns by type
+
+KEY FEATURES IMPLEMENTED:
+- Account-specific reporting with transaction history and balance analysis
+- Cross-account transaction reporting for individual users
+- System-wide administrative reporting with user/account/transaction statistics
+- Date range filtering for all report types (defaults to last 30 days)
+- Report persistence with metadata storage for future retrieval
+- Statistical summaries including transaction counts, amounts, and categorization
+- Role-based access control (customer vs admin reports)
+
+API RESPONSIBILITIES:
+- `/api/reports/account/<account_id>` - Generate detailed account activity reports
+- `/api/reports/transactions` - Generate user's cross-account transaction reports  
+- `/api/reports/system` - Generate system-wide reports (admin only)
+- `/api/reports/list` - List user's historical reports
+- `/api/reports/details/<report_id>` - Retrieve specific report details
+- `/api/reports/all` - List all system reports (admin only)
+- `/api/health` - Service health monitoring
+
+DATA RESPONSIBILITIES:
+- Report metadata storage (Report model with user_id, report_type, title, description)
+- JSON storage of report parameters and generated data
+- Transaction data aggregation and filtering by date ranges
+- Summary calculations: total amounts, counts, breakdowns by transaction type
+- Account type distribution analysis for system reports
+- Financial metrics like total system balance and active/closed account counts
+
+INTEGRATIONS:
+- **Auth Service**: Token verification, user role validation, admin privilege checks
+- **Account Service**: Account details retrieval, account listing, balance information
+- **Transaction Service**: Transaction history retrieval, account-specific transactions
+- **Consul**: Service discovery and health check registration
+- **SQLite Database**: Report persistence with SQLAlchemy ORM
+
+TECHNICAL APPROACH:
+- Flask-based REST API microservice running on port 8004
+- JWT token authentication with service-to-service verification
+- SQLAlchemy ORM with SQLite database for report storage
+- Direct HTTP calls to other services for data aggregation
+- JSON-based report data storage for flexible schema
+- Date parsing and filtering utilities for time-based reporting
+- Decorator-based authentication and authorization patterns
+
+IMPLEMENTATION NOTES:
+- Reports are generated on-demand and automatically saved for historical access
+- Supports flexible date range filtering with sensible defaults (30-day lookback)
+- Admin reports include system-wide statistics not accessible to regular users
+- Service maintains both file-based storage (legacy) and database-based storage
+- All financial calculations preserve precision with proper decimal handling
+- Cross-service error handling with appropriate HTTP status code propagation
+- Report access control ensures users can only view their own reports (except admins)
