@@ -19,3 +19,9 @@ Thumbs.db
 # Temporary files
 *.tmp
 *.temp
+
+# SonarQube analysis files
+.scannerwork/
+sonar-project.properties.backup
+sonar-project-fixed.properties
+sonar-simple.properties
