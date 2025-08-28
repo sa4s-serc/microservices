@@ -1,0 +1,56 @@
+MICROSERVICE: ts-order-other-service
+
+  FUNCTIONAL SCOPE:
+  - Manages orders for trains with IDs that do NOT start with "G" or "D" (non-high-speed trains)
+  - Provides comprehensive order lifecycle management from creation to completion
+  - Handles ticket inventory tracking and seat allocation coordination
+  - Supports both customer-facing and admin operations
+
+  KEY FEATURES IMPLEMENTED:
+  - Order creation and validation with duplicate prevention
+  - Order querying with flexible filtering (by date ranges, status, account)
+  - Order modification and status updates throughout lifecycle
+  - Payment processing and order completion
+  - Security checks for fraud prevention (time-based and volume-based)
+  - Sold ticket calculation and inventory management
+  - Admin order management capabilities
+
+  API RESPONSIBILITIES:
+  - GET sold tickets by date/train for inventory management
+  - POST order creation with comprehensive validation
+  - POST flexible order queries with multi-criteria filtering
+  - GET order details, pricing, and payment processing
+  - PUT order modifications and admin updates
+  - DELETE order removal
+  - GET security validation and fraud detection
+
+  DATA RESPONSIBILITIES:
+  - Order entity management in "orders_other" table with full lifecycle tracking
+  - Business rule: Only handles trains where trainNumber does NOT start with "G" or "D"
+  - Order status management (NOTPAID, PAID, COLLECTED, CANCEL, CHANGE, etc.)
+  - Seat class categorization (BUSINESS, FIRSTCLASS, SECONDCLASS, HARDSEAT, SOFTSEAT, HARDBED, SOFTBED, HIGHSOFTBED)
+  - Price calculation and payment tracking
+  - Security metrics: order frequency monitoring and valid order counting
+
+  INTEGRATIONS:
+  - ts-station-service: Validates station names and retrieves station name lists
+  - Shares order management pattern with ts-order-service (for G/D trains)
+  - Database: MySQL with JPA/Hibernate for persistence
+  - Service discovery: Nacos integration for microservice communication
+
+  TECHNICAL APPROACH:
+  - Spring Boot microservice with REST API
+  - Repository pattern with CrudRepository for data access
+  - Service layer with comprehensive business logic implementation
+  - Controller layer with proper HTTP method mapping and cross-origin support
+  - Entity-based data modeling with JPA annotations
+  - Comprehensive logging and error handling throughout
+
+  IMPLEMENTATION NOTES:
+  - Critical business rule: Train number filtering (NOT starting with G or D)
+  - Duplicate order prevention using account-based validation
+  - Complex order querying with optional date range and status filtering
+  - Security validation includes time-window analysis (1-hour lookback) and valid order counting
+  - Order status transitions follow defined business workflow
+  - Admin operations separated from customer operations with dedicated endpoints
+  - Comprehensive seat class handling for various train types

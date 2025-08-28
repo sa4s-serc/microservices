@@ -1,0 +1,48 @@
+MICROSERVICE: ts-verification-code-service
+
+  FUNCTIONAL SCOPE:
+  - Generates visual CAPTCHA verification codes to prevent automated attacks
+  - Validates user-submitted verification codes against generated codes
+  - Provides stateless verification mechanism for authentication workflows
+
+  KEY FEATURES IMPLEMENTED:
+  - Dynamic CAPTCHA image generation with configurable dimensions
+  - Alphanumeric verification code creation (A-Z, 0-9)
+  - Code validation with case-insensitive matching
+  - Cookie-based code tracking with expiration
+  - In-memory caching for verification codes with TTL
+  - Security hardened with HttpOnly cookies
+
+  API RESPONSIBILITIES:
+  - GET /api/v1/verifycode/generate: Generate and return CAPTCHA image with embedded code
+  - GET /api/v1/verifycode/verify/{verifyCode}: Validate submitted verification code
+
+  DATA RESPONSIBILITIES:
+  - Manages temporary verification code storage in local cache
+  - Associates verification codes with unique cookie identifiers
+  - Enforces code expiration (1000 seconds TTL)
+  - Stores codes in uppercase format for consistency
+  - No persistent data storage - fully stateless operation
+
+  INTEGRATIONS:
+  - Called BY ts-auth-service for user authentication verification
+  - No outbound service dependencies - operates independently
+  - Uses shared ts-common library for common utilities and JWT security
+  - Integrates with Spring Security for endpoint protection
+
+  TECHNICAL APPROACH:
+  - Spring Boot microservice with REST endpoints
+  - BufferedImage for dynamic CAPTCHA generation with noise lines
+  - Google Guava Cache for in-memory code storage with automatic expiration
+  - Cookie-based session correlation without server-side state
+  - Security-first design with XSS protection via HttpOnly cookies
+  - Service discovery integration via Nacos
+
+  IMPLEMENTATION NOTES:
+  - CAPTCHA images use random background colors and interference lines for bot prevention
+  - Character set limited to uppercase letters and digits to avoid confusion
+  - Fixed 4-character verification codes for consistent UX
+  - Cache size limited to 1000 entries to prevent memory exhaustion
+  - Verification endpoint always returns true (potential security issue in current implementation)
+  - CORS enabled for cross-origin requests with credentials disabled
+  - JWT filter applied but verification endpoints are publicly accessible

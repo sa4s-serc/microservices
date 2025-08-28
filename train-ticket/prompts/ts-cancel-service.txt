@@ -1,0 +1,54 @@
+  MICROSERVICE: ts-cancel-service
+
+  FUNCTIONAL SCOPE:
+  - Handles ticket cancellation operations for train reservations
+  - Calculates refund amounts based on cancellation timing and business rules
+  - Processes refund transactions through internal payment system
+  - Manages order status updates for cancelled tickets
+  - Sends email notifications for successful cancellations (optional feature)
+
+  KEY FEATURES IMPLEMENTED:
+  - Ticket cancellation with automatic refund calculation
+  - Support for both high-speed trains (G/D series) and other trains (Z/K/Other series)
+  - Time-based refund calculation with 80% refund rate for valid cancellations
+  - Integration with internal payment system for money drawback
+  - Order status validation (only NOTPAID, PAID, and CHANGE status orders can be cancelled)
+  - Email notification system for successful cancellations
+
+  API RESPONSIBILITIES:
+  - GET /api/v1/cancelservice/cancel/refound/{orderId} - Calculate refund amount for an order
+  - GET /api/v1/cancelservice/cancel/{orderId}/{loginId} - Cancel a ticket and process refund
+  - GET /api/v1/cancelservice/welcome - Health check endpoint
+
+  DATA RESPONSIBILITIES:
+  - Does not maintain its own database - operates as a stateless orchestration service
+  - Validates order status before cancellation (NOTPAID, PAID, CHANGE are allowed)
+  - Calculates refund amounts based on business rules:
+    - NOTPAID orders: 0% refund
+    - PAID orders cancelled before departure: 80% refund
+    - PAID orders cancelled after departure: 0% refund
+  - Updates order status to CANCEL in appropriate order service
+
+  INTEGRATIONS:
+  - ts-order-service: Retrieves and updates G/D series train orders
+  - ts-order-other-service: Retrieves and updates non-G/D train orders
+  - ts-inside-payment-service: Processes refund payments to user accounts
+  - ts-user-service: Retrieves user account information for notifications
+  - ts-notification-service: Sends email notifications (optional/commented out)
+
+  TECHNICAL APPROACH:
+  - Spring Boot microservice with REST API endpoints
+  - Service discovery using Nacos
+  - RestTemplate for synchronous inter-service communication
+  - Stateless design - no database persistence
+  - Authorization header propagation between service calls
+  - Error handling with structured response objects
+  - Comprehensive logging for audit and debugging
+
+  IMPLEMENTATION NOTES:
+  - Refund calculation uses 80% of original ticket price if cancelled before departure time
+  - Supports dual order systems: separate handling for high-speed vs regular trains
+  - Email notification feature is implemented but disabled (TODO comment indicates async messaging planned)
+  - Uses deprecated Date constructor (flagged with NOSONAR comment)
+  - All external service calls include proper authorization header forwarding
+  - Graceful error handling with detailed logging for troubleshooting
