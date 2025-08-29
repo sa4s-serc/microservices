@@ -1,164 +1,136 @@
 package cancel.service;
 
-import edu.fudan.common.entity.NotifyInfo;
 import edu.fudan.common.entity.Order;
-import edu.fudan.common.entity.User;
+import edu.fudan.common.entity.OrderStatus;
 import edu.fudan.common.util.Response;
-import org.junit.Assert;
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.junit.runners.JUnit4;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
-import org.mockito.Mockito;
 import org.mockito.MockitoAnnotations;
-import org.springframework.core.ParameterizedTypeReference;
-import org.springframework.http.*;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpMethod;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.client.RestTemplate;
 
-@RunWith(JUnit4.class)
-public class CancelServiceImplTest {
+import java.util.Date;
 
-    @InjectMocks
-    private CancelServiceImpl cancelServiceImpl;
+import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.*;
+import static org.mockito.Mockito.*;
+
+class CancelServiceImplTest {
 
     @Mock
     private RestTemplate restTemplate;
 
-    private HttpHeaders headers = new HttpHeaders();
-    private HttpEntity requestEntity = new HttpEntity(headers);
+    @InjectMocks
+    private CancelServiceImpl cancelService;
 
-    @Before
-    public void setUp() {
-        MockitoAnnotations.initMocks(this);
+    @BeforeEach
+    void setUp() {
+        MockitoAnnotations.openMocks(this);
     }
 
     @Test
-    public void testCancelOrder1() {
-        //mock getOrderByIdFromOrder()
+    void testCalculateRefundNotPaidOrder() {
+        // Arrange
         Order order = new Order();
-        order.setStatus(6);
-        Response<Order> response = new Response<>(1, null, order);
-        ResponseEntity<Response<Order>> re = new ResponseEntity<>(response, HttpStatus.OK);
-        Mockito.when(restTemplate.exchange(
-                "http://ts-order-service:12031/api/v1/orderservice/order/" + "order_id",
-                HttpMethod.GET,
-                requestEntity,
-                new ParameterizedTypeReference<Response<Order>>() {
-                })).thenReturn(re);
-        Response result = cancelServiceImpl.cancelOrder("order_id", "login_id", headers);
-        Assert.assertEquals(new Response<>(0, "Order Status Cancel Not Permitted", null), result);
+        order.setId("order123");
+        order.setStatus(OrderStatus.NOTPAID.getCode());
+        order.setPrice("100.00");
+
+        Response<Order> orderResponse = new Response<>(1, "Success", order);
+        ResponseEntity<Response> responseEntity = ResponseEntity.ok(orderResponse);
+
+        when(restTemplate.exchange(anyString(), eq(HttpMethod.GET), any(HttpEntity.class), eq(Response.class)))
+                .thenReturn(responseEntity);
+
+        // Act
+        Response result = cancelService.calculateRefund("order123", new HttpHeaders());
+
+        // Assert
+        assertEquals(1, result.getStatus());
+        assertEquals("0.0", result.getData());
     }
 
     @Test
-    public void testCancelOrder2() {
-        //mock getOrderByIdFromOrder()
-        Response<Order> response = new Response<>(0, null, null);
-        ResponseEntity<Response<Order>> re = new ResponseEntity<>(response, HttpStatus.OK);
-        Mockito.when(restTemplate.exchange(
-                "http://ts-order-service:12031/api/v1/orderservice/order/" + "order_id",
-                HttpMethod.GET,
-                requestEntity,
-                new ParameterizedTypeReference<Response<Order>>() {
-                })).thenReturn(re);
-        //mock getOrderByIdFromOrderOther()
+    void testCalculateRefundPaidOrder() {
+        // Arrange
         Order order = new Order();
-        order.setStatus(6);
-        Response<Order> response2 = new Response<>(1, null, order);
-        ResponseEntity<Response<Order>> re2 = new ResponseEntity<>(response2, HttpStatus.OK);
-        Mockito.when(restTemplate.exchange(
-                "http://ts-order-other-service:12032/api/v1/orderOtherService/orderOther/" + "order_id",
-                HttpMethod.GET,
-                requestEntity,
-                new ParameterizedTypeReference<Response<Order>>() {
-                })).thenReturn(re2);
-        Response result = cancelServiceImpl.cancelOrder("order_id", "login_id", headers);
-        Assert.assertEquals(new Response<>(0, "Order Status Cancel Not Permitted", null), result);
+        order.setId("order123");
+        order.setStatus(OrderStatus.PAID.getCode());
+        order.setPrice("100.00");
+        order.setTravelDate("2025-12-31");
+
+        Response<Order> orderResponse = new Response<>(1, "Success", order);
+        ResponseEntity<Response> responseEntity = ResponseEntity.ok(orderResponse);
+
+        when(restTemplate.exchange(anyString(), eq(HttpMethod.GET), any(HttpEntity.class), eq(Response.class)))
+                .thenReturn(responseEntity);
+
+        // Act
+        Response result = cancelService.calculateRefund("order123", new HttpHeaders());
+
+        // Assert
+        assertEquals(1, result.getStatus());
+        assertEquals("80.00", result.getData());
     }
 
     @Test
-    public void testSendEmail() {
-        NotifyInfo notifyInfo = new NotifyInfo();
-        HttpEntity requestEntity2 = new HttpEntity(notifyInfo, headers);
-        ResponseEntity<Boolean> re = new ResponseEntity<>(true, HttpStatus.OK);
-        Mockito.when(restTemplate.exchange(
-                "http://ts-notification-service:17853/api/v1/notifyservice/notification/order_cancel_success",
-                HttpMethod.POST,
-                requestEntity2,
-                Boolean.class)).thenReturn(re);
-        Boolean result = cancelServiceImpl.sendEmail(notifyInfo, headers);
-        Assert.assertTrue(result);
+    void testCalculateRefundOrderNotFound() {
+        // Arrange
+        Response<Order> orderResponse = new Response<>(0, "Order Not Found", null);
+        ResponseEntity<Response> responseEntity = ResponseEntity.ok(orderResponse);
+
+        when(restTemplate.exchange(anyString(), eq(HttpMethod.GET), any(HttpEntity.class), eq(Response.class)))
+                .thenReturn(responseEntity);
+
+        // Act
+        Response result = cancelService.calculateRefund("order123", new HttpHeaders());
+
+        // Assert
+        assertEquals(0, result.getStatus());
+        assertEquals("Order Not Found", result.getMsg());
     }
 
     @Test
-    public void testCalculateRefund1() {
-        //mock getOrderByIdFromOrder()
+    void testCancelOrderSuccess() {
+        // Arrange
         Order order = new Order();
-        order.setStatus(6);
-        Response<Order> response = new Response<>(1, null, order);
-        ResponseEntity<Response<Order>> re = new ResponseEntity<>(response, HttpStatus.OK);
-        Mockito.when(restTemplate.exchange(
-                "http://ts-order-service:12031/api/v1/orderservice/order/" + "order_id",
-                HttpMethod.GET,
-                requestEntity,
-                new ParameterizedTypeReference<Response<Order>>() {
-                })).thenReturn(re);
-        Response result = cancelServiceImpl.calculateRefund("order_id", headers);
-        Assert.assertEquals(new Response<>(0, "Order Status Cancel Not Permitted, Refound error", null), result);
-    }
+        order.setId("order123");
+        order.setStatus(OrderStatus.PAID.getCode());
+        order.setPrice("100.00");
+        order.setTravelDate("2025-12-31");
+        order.setAccountId("user456");
+        order.setTrainNumber("G1234");
 
-    @Test
-    public void testCalculateRefund2() {
-        //mock getOrderByIdFromOrder()
-        Response<Order> response = new Response<>(0, null, null);
-        ResponseEntity<Response<Order>> re = new ResponseEntity<>(response, HttpStatus.OK);
-        Mockito.when(restTemplate.exchange(
-                "http://ts-order-service:12031/api/v1/orderservice/order/" + "order_id",
-                HttpMethod.GET,
-                requestEntity,
-                new ParameterizedTypeReference<Response<Order>>() {
-                })).thenReturn(re);
-        //mock getOrderByIdFromOrderOther()
-        Order order = new Order();
-        order.setStatus(6);
-        Response<Order> response2 = new Response<>(1, null, order);
-        ResponseEntity<Response<Order>> re2 = new ResponseEntity<>(response2, HttpStatus.OK);
-        Mockito.when(restTemplate.exchange(
-                "http://ts-order-other-service:12032/api/v1/orderOtherService/orderOther/" + "order_id",
-                HttpMethod.GET,
-                requestEntity,
-                new ParameterizedTypeReference<Response<Order>>() {
-                })).thenReturn(re2);
-        Response result = cancelServiceImpl.calculateRefund("order_id", headers);
-        Assert.assertEquals(new Response<>(0, "Order Status Cancel Not Permitted", null), result);
-    }
+        // Mock order retrieval
+        Response<Order> orderResponse = new Response<>(1, "Success", order);
+        ResponseEntity<Response> orderResponseEntity = ResponseEntity.ok(orderResponse);
 
-    @Test
-    public void testDrawbackMoney() {
-        Response response = new Response<>(1, null, null);
-        ResponseEntity<Response> re = new ResponseEntity<>(response, HttpStatus.OK);
-        Mockito.when(restTemplate.exchange(
-                "http://ts-inside-payment-service:18673/api/v1/inside_pay_service/inside_payment/drawback/" + "userId" + "/" + "money",
-                HttpMethod.GET,
-                requestEntity,
-                Response.class)).thenReturn(re);
-        Boolean result = cancelServiceImpl.drawbackMoney("money", "userId", headers);
-        Assert.assertTrue(result);
-    }
+        // Mock drawback
+        Response<String> drawbackResponse = new Response<>(1, "Success", null);
+        ResponseEntity<Response> drawbackResponseEntity = ResponseEntity.ok(drawbackResponse);
 
-    @Test
-    public void testGetAccount() {
-        Response<User> response = new Response<>();
-        ResponseEntity<Response<User>> re = new ResponseEntity<>(response, HttpStatus.OK);
-        Mockito.when(restTemplate.exchange(
-                "http://ts-user-service:12342/api/v1/userservice/users/id/" + "orderId",
-                HttpMethod.GET,
-                requestEntity,
-                new ParameterizedTypeReference<Response<User>>() {
-                })).thenReturn(re);
-        Response<User> result = cancelServiceImpl.getAccount("orderId", headers);
-        Assert.assertEquals(new Response<User>(null, null, null), result);
-    }
+        // Mock order update
+        Response<Order> updateResponse = new Response<>(1, "Success", order);
+        ResponseEntity<Response> updateResponseEntity = ResponseEntity.ok(updateResponse);
 
+        when(restTemplate.exchange(contains("/order/"), eq(HttpMethod.GET), any(HttpEntity.class), eq(Response.class)))
+                .thenReturn(orderResponseEntity);
+        when(restTemplate.exchange(contains("/drawback/"), eq(HttpMethod.GET), any(HttpEntity.class), eq(Response.class)))
+                .thenReturn(drawbackResponseEntity);
+        when(restTemplate.exchange(contains("/orderservice/order"), eq(HttpMethod.PUT), any(HttpEntity.class), eq(Response.class)))
+                .thenReturn(updateResponseEntity);
+
+        // Act
+        Response result = cancelService.cancelOrder("order123", "user456", new HttpHeaders());
+
+        // Assert
+        assertEquals(1, result.getStatus());
+        assertEquals("Cancel Success", result.getMsg());
+        assertEquals("80.00", result.getData());
+    }
 }

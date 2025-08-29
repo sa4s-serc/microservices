@@ -1,3 +1,4 @@
+# HTTP Server
 server:
   port: 18885  # HTTP (Tomcat) port
 
@@ -5,7 +6,8 @@ spring:
   cloud:
     nacos:
       discovery:
-        server-addr: ${NACOS_ADDRS:nacos-0.nacos-headless.default.svc.cluster.local,nacos-1.nacos-headless.default.svc.cluster.local,nacos-2.nacos-headless.default.svc.cluster.local}
+        enabled: false
+        server-addr: ${NACOS_ADDRS:127.0.0.1:8848}
   application:
     name: ts-cancel-service
 

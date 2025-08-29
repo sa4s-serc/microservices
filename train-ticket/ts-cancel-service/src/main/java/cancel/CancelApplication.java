@@ -22,7 +22,6 @@ import springfox.documentation.swagger2.annotations.EnableSwagger2;
 @EnableSwagger2
 @EnableDiscoveryClient
 public class CancelApplication {
-
     public static void main(String[] args) {
         SpringApplication.run(CancelApplication.class, args);
     }
