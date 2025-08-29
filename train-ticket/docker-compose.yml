@@ -32,6 +32,19 @@ services:
     networks:
       - my-network
 
+  nacos:
+    image: nacos/nacos-server:v2.0.3
+    container_name: nacos
+    ports:
+      - 8848:8848
+    environment:
+      MODE: standalone
+      NACOS_AUTH_ENABLE: false
+      JVM_XMS: 256m
+      JVM_XMX: 256m
+    networks:
+      - my-network
+
   ts-ui-dashboard:
     build: ts-ui-dashboard
     image: ${IMG_REPO}/ts-ui-dashboard:${IMG_TAG}
