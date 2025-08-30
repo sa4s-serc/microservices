@@ -30,7 +30,7 @@ public class CancelControllerTest {
     @Mock
     private CancelService cancelService;
     private MockMvc mockMvc;
-    private Response response = new Response();
+    private Response response = new Response(1, "Success", "test_data");
 
     @Before
     public void setUp() {
