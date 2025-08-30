@@ -1,23 +1,20 @@
 package cancel.entity;
 
-import edu.fudan.common.entity.Account;
+import edu.fudan.common.entity.User;
 import lombok.Data;
-import edu.fudan.common.entity.Account;
 
 /**
  * @author fdse
  */
 @Data
 public class GetAccountByIdResult {
-
-    private boolean status;
-
-    private String message;
-
-    private Account account;
+    private User user;
 
     public GetAccountByIdResult() {
         //Default Constructor
     }
 
+    public GetAccountByIdResult(User user) {
+        this.user = user;
+    }
 }

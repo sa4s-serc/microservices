@@ -7,11 +7,13 @@ import lombok.Data;
  */
 @Data
 public class GetAccountByIdInfo {
-
     private String accountId;
 
     public GetAccountByIdInfo() {
         //Default Constructor
     }
 
+    public GetAccountByIdInfo(String accountId) {
+        this.accountId = accountId;
+    }
 }
