@@ -1,26 +1,22 @@
 package cancel.service;
 
+import cancel.entity.GetAccountByIdInfo;
+import cancel.entity.GetAccountByIdResult;
+import cancel.entity.GetOrderByIdInfo;
+import com.alibaba.fastjson.JSONObject;
 import edu.fudan.common.entity.NotifyInfo;
-import edu.fudan.common.entity.OrderStatus;
 import edu.fudan.common.entity.Order;
-import edu.fudan.common.entity.SeatClass;
-import edu.fudan.common.entity.User;
+import edu.fudan.common.entity.OrderStatus;
 import edu.fudan.common.util.Response;
 import edu.fudan.common.util.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.cloud.client.discovery.DiscoveryClient;
 import org.springframework.core.ParameterizedTypeReference;
-import org.springframework.http.HttpEntity;
-import org.springframework.http.HttpHeaders;
-import org.springframework.http.HttpMethod;
-import org.springframework.http.ResponseEntity;
+import org.springframework.http.*;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 
-import java.text.DecimalFormat;
-import java.util.Calendar;
 import java.util.Date;
 
 /**
@@ -31,306 +27,275 @@ public class CancelServiceImpl implements CancelService {
 
     @Autowired
     private RestTemplate restTemplate;
-    @Autowired
-    private DiscoveryClient discoveryClient;
 
     private static final Logger LOGGER = LoggerFactory.getLogger(CancelServiceImpl.class);
 
-    String orderStatusCancelNotPermitted = "Order Status Cancel Not Permitted";
-
-    private String getServiceUrl(String serviceName) {
-        return "http://" + serviceName;
-    }
-
-    @Override
-    public Response cancelOrder(String orderId, String loginId, HttpHeaders headers) {
-
-        Response<Order> orderResult = getOrderByIdFromOrder(orderId, headers);
-        if (orderResult.getStatus() == 1) {
-            CancelServiceImpl.LOGGER.info("[cancelOrder][Cancel Order, Order found G|H]");
-            Order order =  orderResult.getData();
-            if (order.getStatus() == OrderStatus.NOTPAID.getCode()
-                    || order.getStatus() == OrderStatus.PAID.getCode() || order.getStatus() == OrderStatus.CHANGE.getCode()) {
-
-                // order.setStatus(OrderStatus.CANCEL.getCode());
-
-                Response changeOrderResult = cancelFromOrder(order, headers);
-                // 0 -- not find order   1 - cancel success
-                if (changeOrderResult.getStatus() == 1) {
-
-                    CancelServiceImpl.LOGGER.info("[cancelOrder][Cancel Order Success]");
-                    //Draw back money
-                    String money = calculateRefund(order);
-                    boolean status = drawbackMoney(money, loginId, headers);
-                    if (status) {
-                        CancelServiceImpl.LOGGER.info("[cancelOrder][Draw Back Money Success]");
-
-
-
-                        Response<User> result = getAccount(order.getAccountId().toString(), headers);
-                        if (result.getStatus() == 0) {
-                            return new Response<>(0, "Cann't find userinfo by user id.", null);
-                        }
-                        NotifyInfo notifyInfo = new NotifyInfo();
-                        notifyInfo.setDate(new Date().toString());
-                        notifyInfo.setEmail(result.getData().getEmail());
-                        notifyInfo.setStartPlace(order.getFrom());
-                        notifyInfo.setEndPlace(order.getTo());
-                        notifyInfo.setUsername(result.getData().getUserName());
-                        notifyInfo.setSeatNumber(order.getSeatNumber());
-                        notifyInfo.setOrderNumber(order.getId().toString());
-                        notifyInfo.setPrice(order.getPrice());
-                        notifyInfo.setSeatClass(SeatClass.getNameByCode(order.getSeatClass()));
-                        notifyInfo.setStartTime(order.getTravelTime().toString());
-
-                        // TODO: change to async message serivce
-                        // sendEmail(notifyInfo, headers);
-
-                    } else {
-                        CancelServiceImpl.LOGGER.error("[cancelOrder][Draw Back Money Failed][loginId: {}, orderId: {}]", loginId, orderId);
-                    }
-                    return new Response<>(1, "Success.", "test not null");
-                } else {
-                    CancelServiceImpl.LOGGER.error("[cancelOrder][Cancel Order Failed][orderId: {}, Reason: {}]", orderId, changeOrderResult.getMsg());
-                    return new Response<>(0, changeOrderResult.getMsg(), null);
-                }
-
-            } else {
-                CancelServiceImpl.LOGGER.info("[cancelOrder][Cancel Order, Order Status Not Permitted][loginId: {}, orderId: {}]", loginId, orderId);
-                return new Response<>(0, orderStatusCancelNotPermitted, null);
-            }
-        } else {
-
-            Response<Order> orderOtherResult = getOrderByIdFromOrderOther(orderId, headers);
-            if (orderOtherResult.getStatus() == 1) {
-                CancelServiceImpl.LOGGER.info("[cancelOrder][Cancel Order, Order found Z|K|Other]");
-
-                Order order =   orderOtherResult.getData();
-                if (order.getStatus() == OrderStatus.NOTPAID.getCode()
-                        || order.getStatus() == OrderStatus.PAID.getCode() || order.getStatus() == OrderStatus.CHANGE.getCode()) {
-
-                    CancelServiceImpl.LOGGER.info("[cancelOrder][Cancel Order, Order status ok]");
-
-//                    order.setStatus(OrderStatus.CANCEL.getCode());
-                    Response changeOrderResult = cancelFromOtherOrder(order, headers);
-
-                    if (changeOrderResult.getStatus() == 1) {
-                        CancelServiceImpl.LOGGER.info("[cancelOrder][Cancel Order Success]");
-                        //Draw back money
-                        String money = calculateRefund(order);
-                        boolean status = drawbackMoney(money, loginId, headers);
-                        if (status) {
-                            CancelServiceImpl.LOGGER.info("[cancelOrder][Draw Back Money Success]");
-                        } else {
-                            CancelServiceImpl.LOGGER.error("[cancelOrder][Draw Back Money Failed][loginId: {}, orderId: {}]", loginId, orderId);
-                        }
-                        return new Response<>(1, "Success.", null);
-                    } else {
-                        CancelServiceImpl.LOGGER.error("[cancelOrder][Cancel Order Failed][orderId: {}, Reason: {}]", orderId, changeOrderResult.getMsg());
-                        return new Response<>(0, "Fail.Reason:" + changeOrderResult.getMsg(), null);
-                    }
-                } else {
-                    CancelServiceImpl.LOGGER.warn("[cancelOrder][Cancel Order, Order Status Not Permitted][loginId: {}, orderId: {}]", loginId, orderId);
-                    return new Response<>(0, orderStatusCancelNotPermitted, null);
-                }
-            } else {
-                CancelServiceImpl.LOGGER.warn("[cancelOrder][Cancel Order, Order Not Found][loginId: {}, orderId: {}]", loginId, orderId);
-                return new Response<>(0, "Order Not Found.", null);
-            }
-        }
-    }
-
-    public boolean sendEmail(NotifyInfo notifyInfo, HttpHeaders headers) {
-        CancelServiceImpl.LOGGER.info("[sendEmail][Send Email]");
-        HttpHeaders newHeaders = getAuthorizationHeadersFrom(headers);
-        HttpEntity requestEntity = new HttpEntity(notifyInfo, newHeaders);
-        String notification_service_url = getServiceUrl("ts-notification-service");
-        ResponseEntity<Boolean> re = restTemplate.exchange(
-                notification_service_url + "/api/v1/notifyservice/notification/order_cancel_success",
-                HttpMethod.POST,
-                requestEntity,
-                Boolean.class);
-        return re.getBody();
-    }
+    private static final String ORDER_SERVICE_URL = "http://ts-order-service:12031";
+    private static final String ORDER_OTHER_SERVICE_URL = "http://ts-order-other-service:12032";
+    private static final String INSIDE_PAYMENT_SERVICE_URL = "http://ts-inside-payment-service:18673";
+    private static final String USER_SERVICE_URL = "http://ts-user-service:12342";
+    private static final String NOTIFICATION_SERVICE_URL = "http://ts-notification-service:17853";
 
     @Override
     public Response calculateRefund(String orderId, HttpHeaders headers) {
+        LOGGER.info("[calculateRefund][Calculate refund][orderId: {}]", orderId);
 
-        Response<Order> orderResult = getOrderByIdFromOrder(orderId, headers);
-        if (orderResult.getStatus() == 1) {
-            Order order =   orderResult.getData();
-            if (order.getStatus() == OrderStatus.NOTPAID.getCode()
-                    || order.getStatus() == OrderStatus.PAID.getCode()) {
-                if (order.getStatus() == OrderStatus.NOTPAID.getCode()) {
-                    CancelServiceImpl.LOGGER.info("[calculateRefund][Cancel Order, Refund Price From Order Service.Not Paid][orderId: {}]", orderId);
-                    return new Response<>(1, "Success. Refoud 0", "0");
-                } else {
-                    CancelServiceImpl.LOGGER.info("[calculateRefund][Cancel Order, Refund Price From Order Service.Paid][orderId: {}]", orderId);
-                    return new Response<>(1, "Success. ", calculateRefund(order));
-                }
-            } else {
-                CancelServiceImpl.LOGGER.info("[calculateRefund][Cancel Order Refund Price Order.Cancel Not Permitted][orderId: {}]", orderId);
-                return new Response<>(0, "Order Status Cancel Not Permitted, Refound error", null);
+        try {
+            Order order = getOrderByOrderId(orderId, headers);
+            if (order == null) {
+                LOGGER.warn("[calculateRefund][Order not found][orderId: {}]", orderId);
+                return new Response<>(0, "Order not found.", null);
             }
-        } else {
 
-            Response<Order> orderOtherResult = getOrderByIdFromOrderOther(orderId, headers);
-            if (orderOtherResult.getStatus() == 1) {
-                Order order =   orderOtherResult.getData();
-                if (order.getStatus() == OrderStatus.NOTPAID.getCode()
-                        || order.getStatus() == OrderStatus.PAID.getCode()) {
-                    if (order.getStatus() == OrderStatus.NOTPAID.getCode()) {
-                        CancelServiceImpl.LOGGER.info("[calculateRefund][Cancel Order, Refund Price From Order Other Service.Not Paid][orderId: {}]", orderId);
-                        return new Response<>(1, "Success, Refound 0", "0");
-                    } else {
-                        CancelServiceImpl.LOGGER.info("[Cancel Order][Refund Price From Order Other Service.Paid][orderId: {}]", orderId);
-                        return new Response<>(1, "Success", calculateRefund(order));
-                    }
-                } else {
-                    CancelServiceImpl.LOGGER.warn("[Cancel Order][Refund Price, Order Other. Cancel Not Permitted][orderId: {}]", orderId);
-                    return new Response<>(0, orderStatusCancelNotPermitted, null);
-                }
-            } else {
-                CancelServiceImpl.LOGGER.error("[Cancel Order][Refund Price][Order not found][orderId: {}]", orderId);
-                return new Response<>(0, "Order Not Found", null);
+            if (order.getStatus() != OrderStatus.PAID.getCode() && 
+                order.getStatus() != OrderStatus.NOTPAID.getCode() && 
+                order.getStatus() != OrderStatus.CHANGE.getCode()) {
+                LOGGER.warn("[calculateRefund][Order status not refundable][orderId: {}, status: {}]", orderId, order.getStatus());
+                return new Response<>(0, "Order status is not refundable.", null);
             }
+
+            double refundAmount = 0.0;
+
+            if (order.getStatus() == OrderStatus.NOTPAID.getCode()) {
+                refundAmount = 0.0;
+            } else if (order.getStatus() == OrderStatus.PAID.getCode() || order.getStatus() == OrderStatus.CHANGE.getCode()) {
+                Date travelDate = StringUtils.String2Date(order.getTravelDate());
+                Date currentDate = new Date();
+                
+                if (currentDate.before(travelDate)) {
+                    double originalPrice = Double.parseDouble(order.getPrice());
+                    refundAmount = originalPrice * 0.8;
+                } else {
+                    refundAmount = 0.0;
+                }
+            }
+
+            LOGGER.info("[calculateRefund][Refund calculated][orderId: {}, amount: {}]", orderId, refundAmount);
+            return new Response<>(1, "Success.", String.valueOf(refundAmount));
+
+        } catch (Exception e) {
+            LOGGER.error("[calculateRefund][Error calculating refund][orderId: {}][error: {}]", orderId, e.getMessage());
+            return new Response<>(0, "Error calculating refund: " + e.getMessage(), null);
         }
     }
 
-    private String calculateRefund(Order order) {
-        if (order.getStatus() == OrderStatus.NOTPAID.getCode()) {
-            return "0.00";
+    @Override
+    public Response cancelTicket(String orderId, String loginId, HttpHeaders headers) {
+        LOGGER.info("[cancelTicket][Cancel ticket][orderId: {}, loginId: {}]", orderId, loginId);
+
+        try {
+            Order order = getOrderByOrderId(orderId, headers);
+            if (order == null) {
+                LOGGER.warn("[cancelTicket][Order not found][orderId: {}]", orderId);
+                return new Response<>(0, "Order not found.", null);
+            }
+
+            if (order.getStatus() != OrderStatus.PAID.getCode() && 
+                order.getStatus() != OrderStatus.NOTPAID.getCode() && 
+                order.getStatus() != OrderStatus.CHANGE.getCode()) {
+                LOGGER.warn("[cancelTicket][Order status not cancellable][orderId: {}, status: {}]", orderId, order.getStatus());
+                return new Response<>(0, "Order status is not cancellable.", null);
+            }
+
+            double refundAmount = 0.0;
+            if (order.getStatus() == OrderStatus.PAID.getCode() || order.getStatus() == OrderStatus.CHANGE.getCode()) {
+                Date travelDate = StringUtils.String2Date(order.getTravelDate());
+                @SuppressWarnings("deprecation")
+                Date currentDate = new Date();
+                
+                if (currentDate.before(travelDate)) {
+                    double originalPrice = Double.parseDouble(order.getPrice());
+                    refundAmount = originalPrice * 0.8;
+                }
+            }
+
+            boolean updateResult = updateOrderStatus(orderId, OrderStatus.CANCEL.getCode(), order.getTrainNumber(), headers);
+            if (!updateResult) {
+                LOGGER.error("[cancelTicket][Failed to update order status][orderId: {}]", orderId);
+                return new Response<>(0, "Failed to update order status.", null);
+            }
+
+            if (refundAmount > 0) {
+                boolean drawbackResult = processDrawback(order.getAccountId(), String.valueOf(refundAmount), headers);
+                if (!drawbackResult) {
+                    LOGGER.error("[cancelTicket][Failed to process refund][orderId: {}, amount: {}]", orderId, refundAmount);
+                    return new Response<>(0, "Failed to process refund.", null);
+                }
+            }
+
+            try {
+                GetAccountByIdResult accountInfo = getUserAccountInfo(order.getAccountId(), headers);
+                if (accountInfo != null) {
+                    sendCancelNotification(order, accountInfo.getEmail(), headers);
+                }
+            } catch (Exception e) {
+                LOGGER.warn("[cancelTicket][Failed to send notification][orderId: {}][error: {}]", orderId, e.getMessage());
+            }
+
+            LOGGER.info("[cancelTicket][Ticket cancelled successfully][orderId: {}, refund: {}]", orderId, refundAmount);
+            return new Response<>(1, "Success.", "Ticket cancelled successfully. Refund amount: " + refundAmount);
+
+        } catch (Exception e) {
+            LOGGER.error("[cancelTicket][Error cancelling ticket][orderId: {}][error: {}]", orderId, e.getMessage());
+            return new Response<>(0, "Error cancelling ticket: " + e.getMessage(), null);
         }
-        CancelServiceImpl.LOGGER.info("[calculateRefund][Cancel Order][Order Travel Date: {}]", order.getTravelDate().toString());
-        Date nowDate = new Date();
-        Calendar cal = Calendar.getInstance();
-        cal.setTime(StringUtils.String2Date(order.getTravelDate()));
-        int year = cal.get(Calendar.YEAR);
-        int month = cal.get(Calendar.MONTH);
-        int day = cal.get(Calendar.DAY_OF_MONTH);
-        Calendar cal2 = Calendar.getInstance();
-        cal2.setTime(StringUtils.String2Date(order.getTravelTime()));
-        int hour = cal2.get(Calendar.HOUR);
-        int minute = cal2.get(Calendar.MINUTE);
-        int second = cal2.get(Calendar.SECOND);
-        Date startTime = new Date(year,  //NOSONAR
-                month,
-                day,
-                hour,
-                minute,
-                second);
-        CancelServiceImpl.LOGGER.info("[calculateRefund][Cancel Order][nowDate  : {}]", nowDate);
-        CancelServiceImpl.LOGGER.info("[calculateRefund][Cancel Order][startTime: {}]", startTime);
-        if (nowDate.after(startTime)) {
-            CancelServiceImpl.LOGGER.warn("[calculateRefund][Cancel Order, Ticket expire refund 0]");
-            return "0";
-        } else {
-            double totalPrice = Double.parseDouble(order.getPrice());
-            double price = totalPrice * 0.8;
-            DecimalFormat priceFormat = new java.text.DecimalFormat("0.00");
-            String str = priceFormat.format(price);
-            CancelServiceImpl.LOGGER.info("[calculateRefund][calculate refund][refund: {}]", str);
-            return str;
+    }
+
+    private Order getOrderByOrderId(String orderId, HttpHeaders headers) {
+        LOGGER.info("[getOrderByOrderId][Get order][orderId: {}]", orderId);
+
+        HttpEntity requestEntity = new HttpEntity(headers);
+
+        try {
+            String orderServiceUrl = ORDER_SERVICE_URL + "/api/v1/orderservice/order/" + orderId;
+            ResponseEntity<Response<Order>> orderResponse = restTemplate.exchange(
+                    orderServiceUrl,
+                    HttpMethod.GET,
+                    requestEntity,
+                    new ParameterizedTypeReference<Response<Order>>() {}
+            );
+
+            if (orderResponse.getBody() != null && orderResponse.getBody().getStatus() == 1) {
+                LOGGER.info("[getOrderByOrderId][Found order in order service][orderId: {}]", orderId);
+                return orderResponse.getBody().getData();
+            }
+        } catch (Exception e) {
+            LOGGER.warn("[getOrderByOrderId][Order service error][orderId: {}][error: {}]", orderId, e.getMessage());
+        }
+
+        try {
+            String orderOtherServiceUrl = ORDER_OTHER_SERVICE_URL + "/api/v1/orderOtherService/orderOther/" + orderId;
+            ResponseEntity<Response<Order>> orderOtherResponse = restTemplate.exchange(
+                    orderOtherServiceUrl,
+                    HttpMethod.GET,
+                    requestEntity,
+                    new ParameterizedTypeReference<Response<Order>>() {}
+            );
+
+            if (orderOtherResponse.getBody() != null && orderOtherResponse.getBody().getStatus() == 1) {
+                LOGGER.info("[getOrderByOrderId][Found order in order-other service][orderId: {}]", orderId);
+                return orderOtherResponse.getBody().getData();
+            }
+        } catch (Exception e) {
+            LOGGER.warn("[getOrderByOrderId][Order-other service error][orderId: {}][error: {}]", orderId, e.getMessage());
+        }
+
+        LOGGER.warn("[getOrderByOrderId][Order not found in any service][orderId: {}]", orderId);
+        return null;
+    }
+
+    private boolean updateOrderStatus(String orderId, int status, String trainNumber, HttpHeaders headers) {
+        LOGGER.info("[updateOrderStatus][Update order status][orderId: {}, status: {}]", orderId, status);
+
+        HttpEntity requestEntity = new HttpEntity(headers);
+
+        try {
+            if (trainNumber.startsWith("G") || trainNumber.startsWith("D")) {
+                String updateUrl = ORDER_SERVICE_URL + "/api/v1/orderservice/order/status/" + orderId + "/" + status;
+                ResponseEntity<Response> response = restTemplate.exchange(
+                        updateUrl,
+                        HttpMethod.GET,
+                        requestEntity,
+                        Response.class
+                );
+                return response.getBody() != null && response.getBody().getStatus() == 1;
+            } else {
+                String updateUrl = ORDER_OTHER_SERVICE_URL + "/api/v1/orderOtherService/orderOther/status/" + orderId + "/" + status;
+                ResponseEntity<Response> response = restTemplate.exchange(
+                        updateUrl,
+                        HttpMethod.GET,
+                        requestEntity,
+                        Response.class
+                );
+                return response.getBody() != null && response.getBody().getStatus() == 1;
+            }
+        } catch (Exception e) {
+            LOGGER.error("[updateOrderStatus][Error updating order status][orderId: {}][error: {}]", orderId, e.getMessage());
+            return false;
         }
     }
 
+    private boolean processDrawback(String userId, String money, HttpHeaders headers) {
+        LOGGER.info("[processDrawback][Process drawback][userId: {}, money: {}]", userId, money);
 
-    private Response cancelFromOrder(Order order, HttpHeaders headers) {
-        CancelServiceImpl.LOGGER.info("[cancelFromOrder][Change Order Status]");
-        order.setStatus(OrderStatus.CANCEL.getCode());
-        // add authorization header
-        HttpHeaders newHeaders = getAuthorizationHeadersFrom(headers);
-        HttpEntity requestEntity = new HttpEntity(order, newHeaders);
-        String order_service_url = getServiceUrl("ts-order-service");
-        ResponseEntity<Response> re = restTemplate.exchange(
-                order_service_url + "/api/v1/orderservice/order",
-                HttpMethod.PUT,
-                requestEntity,
-                Response.class);
+        HttpEntity requestEntity = new HttpEntity(headers);
 
-        return re.getBody();
-    }
+        try {
+            String drawbackUrl = INSIDE_PAYMENT_SERVICE_URL + "/api/v1/inside_pay_service/inside_payment/drawback/" + userId + "/" + money;
+            ResponseEntity<Response> response = restTemplate.exchange(
+                    drawbackUrl,
+                    HttpMethod.GET,
+                    requestEntity,
+                    Response.class
+            );
 
-    public static HttpHeaders getAuthorizationHeadersFrom(HttpHeaders oldHeaders) {
-        HttpHeaders newHeaders = new HttpHeaders();
-        if (oldHeaders.containsKey(HttpHeaders.AUTHORIZATION)) {
-            newHeaders.add(HttpHeaders.AUTHORIZATION, oldHeaders.getFirst(HttpHeaders.AUTHORIZATION));
+            boolean success = response.getBody() != null && response.getBody().getStatus() == 1;
+            LOGGER.info("[processDrawback][Drawback result][userId: {}, money: {}, success: {}]", userId, money, success);
+            return success;
+        } catch (Exception e) {
+            LOGGER.error("[processDrawback][Error processing drawback][userId: {}, money: {}][error: {}]", userId, money, e.getMessage());
+            return false;
         }
-        return newHeaders;
     }
 
+    private GetAccountByIdResult getUserAccountInfo(String accountId, HttpHeaders headers) {
+        LOGGER.info("[getUserAccountInfo][Get user account info][accountId: {}]", accountId);
 
-    private Response cancelFromOtherOrder(Order order, HttpHeaders headers) {
-        CancelServiceImpl.LOGGER.info("[cancelFromOtherOrder][Change Order Status]");
-        order.setStatus(OrderStatus.CANCEL.getCode());
-        HttpHeaders newHeaders = getAuthorizationHeadersFrom(headers);
-        HttpEntity requestEntity = new HttpEntity(order, newHeaders);
-        String order_other_service_url = getServiceUrl("ts-order-other-service");
-        ResponseEntity<Response> re = restTemplate.exchange(
-                order_other_service_url + "/api/v1/orderOtherService/orderOther",
-                HttpMethod.PUT,
-                requestEntity,
-                Response.class);
+        HttpEntity requestEntity = new HttpEntity(headers);
 
-        return re.getBody();
+        try {
+            String userServiceUrl = USER_SERVICE_URL + "/api/v1/userservice/users/id/" + accountId;
+            ResponseEntity<Response<GetAccountByIdResult>> response = restTemplate.exchange(
+                    userServiceUrl,
+                    HttpMethod.GET,
+                    requestEntity,
+                    new ParameterizedTypeReference<Response<GetAccountByIdResult>>() {}
+            );
+
+            if (response.getBody() != null && response.getBody().getStatus() == 1) {
+                LOGGER.info("[getUserAccountInfo][User account info retrieved][accountId: {}]", accountId);
+                return response.getBody().getData();
+            }
+        } catch (Exception e) {
+            LOGGER.warn("[getUserAccountInfo][Error getting user account info][accountId: {}][error: {}]", accountId, e.getMessage());
+        }
+
+        return null;
     }
 
-    public boolean drawbackMoney(String money, String userId, HttpHeaders headers) {
-        CancelServiceImpl.LOGGER.info("[drawbackMoney][Draw Back Money]");
+    private void sendCancelNotification(Order order, String email, HttpHeaders headers) {
+        LOGGER.info("[sendCancelNotification][Send cancel notification][orderId: {}, email: {}]", order.getId(), email);
 
-        HttpHeaders newHeaders = getAuthorizationHeadersFrom(headers);
-        HttpEntity requestEntity = new HttpEntity(newHeaders);
-        String inside_payment_service_url = getServiceUrl("ts-inside-payment-service");
-        ResponseEntity<Response> re = restTemplate.exchange(
-                inside_payment_service_url + "/api/v1/inside_pay_service/inside_payment/drawback/" + userId + "/" + money,
-                HttpMethod.GET,
-                requestEntity,
-                Response.class);
-        Response result = re.getBody();
+        try {
+            NotifyInfo notifyInfo = new NotifyInfo();
+            notifyInfo.setOrderNumber(order.getId());
+            notifyInfo.setUsername(order.getContactsName());
+            notifyInfo.setStartPlace(order.getFrom());
+            notifyInfo.setEndPlace(order.getTo());
+            notifyInfo.setStartTime(order.getTravelTime());
+            notifyInfo.setDate(order.getTravelDate());
+            notifyInfo.setSeatClass("" + order.getSeatClass());
+            notifyInfo.setSeatNumber(order.getSeatNumber());
+            notifyInfo.setPrice(order.getPrice());
+            notifyInfo.setEmail(email);
 
-        return result.getStatus() == 1;
+            HttpEntity<NotifyInfo> requestEntity = new HttpEntity<>(notifyInfo, headers);
+            String notificationUrl = NOTIFICATION_SERVICE_URL + "/api/v1/notifyservice/notification/order_cancel_success";
+            
+            ResponseEntity<Response> response = restTemplate.exchange(
+                    notificationUrl,
+                    HttpMethod.POST,
+                    requestEntity,
+                    Response.class
+            );
+
+            if (response.getBody() != null && response.getBody().getStatus() == 1) {
+                LOGGER.info("[sendCancelNotification][Notification sent successfully][orderId: {}]", order.getId());
+            } else {
+                LOGGER.warn("[sendCancelNotification][Failed to send notification][orderId: {}]", order.getId());
+            }
+        } catch (Exception e) {
+            LOGGER.error("[sendCancelNotification][Error sending notification][orderId: {}][error: {}]", order.getId(), e.getMessage());
+        }
     }
-
-    public Response<User> getAccount(String orderId, HttpHeaders headers) {
-        CancelServiceImpl.LOGGER.info("[getAccount][Get By Id][orderId: {}]", orderId);
-        HttpHeaders newHeaders = getAuthorizationHeadersFrom(headers);
-        HttpEntity requestEntity = new HttpEntity(newHeaders);
-        String user_service_url = getServiceUrl("ts-user-service");
-        ResponseEntity<Response<User>> re = restTemplate.exchange(
-                user_service_url + "/api/v1/userservice/users/id/" + orderId,
-                HttpMethod.GET,
-                requestEntity,
-                new ParameterizedTypeReference<Response<User>>() {
-                });
-        return re.getBody();
-    }
-
-    private Response<Order> getOrderByIdFromOrder(String orderId, HttpHeaders headers) {
-        CancelServiceImpl.LOGGER.info("[getOrderByIdFromOrder][Get Order][orderId: {}]", orderId);
-        HttpHeaders newHeaders = getAuthorizationHeadersFrom(headers);
-        HttpEntity requestEntity = new HttpEntity(newHeaders);
-        String order_service_url = getServiceUrl("ts-order-service");
-        ResponseEntity<Response<Order>> re = restTemplate.exchange(
-                order_service_url + "/api/v1/orderservice/order/" + orderId,
-                HttpMethod.GET,
-                requestEntity,
-                new ParameterizedTypeReference<Response<Order>>() {
-                });
-        return re.getBody();
-    }
-
-    private Response<Order> getOrderByIdFromOrderOther(String orderId, HttpHeaders headers) {
-        CancelServiceImpl.LOGGER.info("[getOrderByIdFromOrderOther][Get Order][orderId: {}]", orderId);
-        HttpHeaders newHeaders = getAuthorizationHeadersFrom(headers);
-        HttpEntity requestEntity = new HttpEntity(newHeaders);
-        String order_other_service_url = getServiceUrl("ts-order-other-service");
-        ResponseEntity<Response<Order>> re = restTemplate.exchange(
-                order_other_service_url + "/api/v1/orderOtherService/orderOther/" + orderId,
-                HttpMethod.GET,
-                requestEntity,
-                new ParameterizedTypeReference<Response<Order>>() {
-                });
-        return re.getBody();
-    }
-
 }

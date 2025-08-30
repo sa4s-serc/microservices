@@ -7,11 +7,13 @@ import lombok.Data;
  */
 @Data
 public class GetAccountByIdInfo {
-
-    private String accountId;
+    private String orderId;
 
     public GetAccountByIdInfo() {
-        //Default Constructor
+        // Default constructor
     }
 
+    public GetAccountByIdInfo(String orderId) {
+        this.orderId = orderId;
+    }
 }
