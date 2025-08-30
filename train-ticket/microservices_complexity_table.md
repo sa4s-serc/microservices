@@ -943,3 +943,4 @@ cd /home/bassam/Documents/reserach/code/microservices/train-ticket/ts-order-othe
 
   Result: From 22 errors + multiple failures → 0 errors + 0 failures (51 total tests passing)
 
+cd /home/bassam/Documents/reserach/code/microservices/train-ticket/ts-verification-code-service && JAVA_HOME=/usr/lib/jvm/java-1.8.0-openjdk-amd64 mvn test
