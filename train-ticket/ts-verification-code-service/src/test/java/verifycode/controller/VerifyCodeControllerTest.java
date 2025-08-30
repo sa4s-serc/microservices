@@ -43,23 +43,20 @@ public class VerifyCodeControllerTest {
     }
 
     @Test
-    public void testImageCode() throws Exception {
-        Map<String, Object> map = new HashMap<>();
-        BufferedImage image = new BufferedImage(60, 20, BufferedImage.TYPE_INT_RGB);
-        map.put("strEnsure", "XYZ8");
-        map.put("image", image);
-        Mockito.when(verifyCodeService.getImageCode(Mockito.anyInt(), Mockito.anyInt(), Mockito.any(OutputStream.class), Mockito.any(HttpServletRequest.class), Mockito.any(HttpServletResponse.class), Mockito.any(HttpHeaders.class))).thenReturn(map);
+    public void testGenerateVerifyCode() throws Exception {
+        Mockito.doNothing().when(verifyCodeService).generateVerifyCode(Mockito.any(HttpServletResponse.class));
         mockMvc.perform(MockMvcRequestBuilders.get("/api/v1/verifycode/generate")).andReturn();
-        Mockito.verify(verifyCodeService, Mockito.times(1)).getImageCode(Mockito.anyInt(), Mockito.anyInt(), Mockito.any(OutputStream.class), Mockito.any(HttpServletRequest.class), Mockito.any(HttpServletResponse.class), Mockito.any(HttpHeaders.class));
+        Mockito.verify(verifyCodeService, Mockito.times(1)).generateVerifyCode(Mockito.any(HttpServletResponse.class));
     }
 
     @Test
     public void testVerifyCode() throws Exception {
-        Mockito.when(verifyCodeService.verifyCode(Mockito.any(HttpServletRequest.class), Mockito.any(HttpServletResponse.class), Mockito.anyString(), Mockito.any(HttpHeaders.class))).thenReturn(true);
+        Mockito.when(verifyCodeService.verifyCode(Mockito.anyString(), Mockito.any(HttpHeaders.class))).thenReturn(true);
         String result = mockMvc.perform(MockMvcRequestBuilders.get("/api/v1/verifycode/verify/verifyCode"))
                 .andExpect(MockMvcResultMatchers.status().isOk())
                 .andReturn().getResponse().getContentAsString();
-        Assert.assertTrue(JSONObject.parseObject(result, Boolean.class));
+        Response response = JSONObject.parseObject(result, Response.class);
+        Assert.assertEquals(1, response.getStatus().intValue());
     }
 
 }

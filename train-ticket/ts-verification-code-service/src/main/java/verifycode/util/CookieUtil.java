@@ -1,44 +1,29 @@
 package verifycode.util;
 
-import javax.servlet.http.Cookie;
-import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpServletResponse;
-import java.util.HashMap;
-import java.util.Map;
-
 /**
  * @author fdse
  */
 public class CookieUtil {
 
-    private CookieUtil() {
-        throw new IllegalStateException("Utility class");
-    }
-
-    public static void addCookie(HttpServletResponse response, String name, String value, int maxAge){
-        Cookie cookie = new Cookie(name,value);
-        // against Cross-Site Scripting (XSS) attacks.
-        cookie.setHttpOnly(true);
-        cookie.setPath("/");
-        if(maxAge>0) {
-            cookie.setMaxAge(maxAge);
+    /**
+     * Extract cookie value by name from cookie header string
+     *
+     * @param cookieHeader the cookie header string
+     * @param cookieName the name of the cookie to extract
+     * @return the cookie value or null if not found
+     */
+    public static String getCookieValue(String cookieHeader, String cookieName) {
+        if (cookieHeader == null || cookieName == null) {
+            return null;
         }
-        response.addCookie(cookie);
-    }
 
-    public static Cookie getCookieByName(HttpServletRequest request, String name){
-        Map<String,Cookie> cookieMap = readCookieMap(request);
-        return cookieMap.getOrDefault(name, null);
-    }
-
-    private static Map<String,Cookie> readCookieMap(HttpServletRequest request){
-        Map<String,Cookie> cookieMap = new HashMap<>();
-        Cookie[] cookies = request.getCookies();
-        if(null!=cookies){
-            for(Cookie cookie : cookies){
-                cookieMap.put(cookie.getName(), cookie);
+        String[] cookies = cookieHeader.split(";");
+        for (String cookie : cookies) {
+            String[] parts = cookie.trim().split("=");
+            if (parts.length == 2 && cookieName.equals(parts[0].trim())) {
+                return parts[1].trim();
             }
         }
-        return cookieMap;
+        return null;
     }
 }

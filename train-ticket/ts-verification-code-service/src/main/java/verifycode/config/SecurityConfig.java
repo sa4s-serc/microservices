@@ -8,72 +8,47 @@ import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.annotation.web.configuration.WebSecurityConfigurerAdapter;
 import org.springframework.security.config.http.SessionCreationPolicy;
-import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
-import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
-import org.springframework.web.servlet.config.annotation.CorsRegistry;
-import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
-import org.springframework.web.servlet.config.annotation.WebMvcConfigurerAdapter;
+import org.springframework.web.cors.CorsConfiguration;
+import org.springframework.web.cors.CorsConfigurationSource;
+import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
-import static org.springframework.web.cors.CorsConfiguration.ALL;
+import java.util.Arrays;
 
 /**
- * @author LeBW
+ * @author fdse
  */
 @Configuration
 @EnableWebSecurity
 @EnableGlobalMethodSecurity(prePostEnabled = true)
 public class SecurityConfig extends WebSecurityConfigurerAdapter {
 
-    /**
-     * load password encoder
-     *
-     * @return PasswordEncoder
-     */
     @Bean
-    public PasswordEncoder passwordEncoder() {
-        return new BCryptPasswordEncoder();
+    public JWTFilter jwtFilter() {
+        return new JWTFilter();
     }
 
-    /**
-     * allow cors domain
-     * header  By default, only six fields can be taken from the header, and the other fields can only be specified in the header.
-     * credentials   Cookies are not sent by default and can only be true if a Cookie is needed
-     * Validity of this request
-     *
-     * @return WebMvcConfigurer
-     */
     @Bean
-    public WebMvcConfigurer corsConfigurer() {
-        return new WebMvcConfigurerAdapter() {
-            @Override
-            public void addCorsMappings(CorsRegistry registry) {
-                registry.addMapping("/**")
-                        .allowedOrigins(ALL)
-                        .allowedMethods(ALL)
-                        .allowedHeaders(ALL)
-                        .allowCredentials(false)
-                        .maxAge(3600);
-            }
-        };
+    CorsConfigurationSource corsConfigurationSource() {
+        CorsConfiguration configuration = new CorsConfiguration();
+        configuration.setAllowedOrigins(Arrays.asList("*"));
+        configuration.setAllowedMethods(Arrays.asList("*"));
+        configuration.setAllowedHeaders(Arrays.asList("*"));
+        configuration.setAllowCredentials(false);
+        UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
+        source.registerCorsConfiguration("/**", configuration);
+        return source;
     }
-
 
     @Override
-    protected void configure(HttpSecurity httpSecurity) throws Exception {
-        httpSecurity.httpBasic().disable()
-                // close default csrf
-                .csrf().disable()
-                // close session
-                .sessionManagement().sessionCreationPolicy(SessionCreationPolicy.STATELESS)
-                .and()
+    protected void configure(HttpSecurity http) throws Exception {
+        http.cors().and().csrf().disable()
                 .authorizeRequests()
                 .antMatchers("/api/v1/verifycode/**").permitAll()
                 .anyRequest().authenticated()
                 .and()
-                .addFilterBefore(new JWTFilter(), UsernamePasswordAuthenticationFilter.class);
+                .sessionManagement().sessionCreationPolicy(SessionCreationPolicy.STATELESS);
 
-        // close cache
-        httpSecurity.headers().cacheControl();
+        http.addFilterBefore(jwtFilter(), UsernamePasswordAuthenticationFilter.class);
     }
 }

@@ -2,18 +2,28 @@ package verifycode.service;
 
 import org.springframework.http.HttpHeaders;
 
-import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
-import java.io.OutputStream;
-import java.util.Map;
+import java.io.IOException;
 
 /**
  * @author fdse
  */
 public interface VerifyCodeService {
 
-    Map<String, Object> getImageCode(int width, int height, OutputStream os, HttpServletRequest request, HttpServletResponse response, HttpHeaders headers);
+    /**
+     * Generate verification code image and set cookie
+     *
+     * @param response HTTP response
+     * @throws IOException if image generation fails
+     */
+    void generateVerifyCode(HttpServletResponse response) throws IOException;
 
-    boolean verifyCode(HttpServletRequest request, HttpServletResponse response, String receivedCode, HttpHeaders headers);
-
+    /**
+     * Verify the submitted verification code
+     *
+     * @param verifyCode the verification code to verify
+     * @param headers HTTP headers containing cookies
+     * @return true if verification is successful, false otherwise
+     */
+    boolean verifyCode(String verifyCode, HttpHeaders headers);
 }

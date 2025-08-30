@@ -1,19 +1,18 @@
 package verifycode.controller;
 
+import edu.fudan.common.util.Response;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import verifycode.service.VerifyCodeService;
 
-import javax.imageio.ImageIO;
-import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
-import java.awt.image.BufferedImage;
 import java.io.IOException;
-import java.io.OutputStream;
-import java.util.Map;
 
 /**
  * @author fdse
@@ -21,37 +20,39 @@ import java.util.Map;
 @RestController
 @RequestMapping("/api/v1/verifycode")
 public class VerifyCodeController {
-    private static final Logger LOGGER = LoggerFactory.getLogger(VerifyCodeController.class);
 
     @Autowired
     private VerifyCodeService verifyCodeService;
 
-    @GetMapping("/generate")
-    public void imageCode(@RequestHeader HttpHeaders headers,
-                          HttpServletRequest request,
-                          HttpServletResponse response) throws IOException {
-        VerifyCodeController.LOGGER.info("[imageCode][Image code]");
-        OutputStream os = response.getOutputStream();
-        Map<String, Object> map = verifyCodeService.getImageCode(60, 20, os, request, response, headers);
-        String simpleCaptcha = "simpleCaptcha";
-        request.getSession().setAttribute(simpleCaptcha, map.get("strEnsure").toString().toLowerCase());
-        request.getSession().setAttribute("codeTime", System.currentTimeMillis());
-        try {
-            ImageIO.write((BufferedImage) map.get("image"), "JPEG", os);
-        } catch (IOException e) {
-            //error
-            String error = "Can't generate verification code";
-            os.write(error.getBytes());
-        }
+    private static final Logger LOGGER = LoggerFactory.getLogger(VerifyCodeController.class);
+
+    @GetMapping(path = "/welcome")
+    public String home(@RequestHeader HttpHeaders headers) {
+        return "Welcome to [ Verification Code Service ] !";
     }
 
-    @GetMapping(value = "/verify/{verifyCode}")
-    public boolean verifyCode(@PathVariable String verifyCode, HttpServletRequest request,
-                              HttpServletResponse response, @RequestHeader HttpHeaders headers) {
-        LOGGER.info("[verifyCode][receivedCode: {}]", verifyCode);
+    @CrossOrigin(origins = "*")
+    @GetMapping(path = "/generate")
+    public void generateVerifyCode(HttpServletResponse response) throws IOException {
+        LOGGER.info("[generateVerifyCode][Generate Verification Code]");
+        
+        response.setContentType("image/png");
+        response.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+        response.setHeader("Pragma", "no-cache");
+        response.setDateHeader("Expires", 0);
+        
+        verifyCodeService.generateVerifyCode(response);
+    }
 
-        boolean result = verifyCodeService.verifyCode(request, response, verifyCode, headers);
-        LOGGER.info("[verifyCode][verify result: {}]", result);
-        return true;
+    @CrossOrigin(origins = "*")
+    @GetMapping(path = "/verify/{verifyCode}")
+    public ResponseEntity<Response<Boolean>> verifyCode(@PathVariable String verifyCode,
+                                                       @RequestHeader HttpHeaders headers) {
+        LOGGER.info("[verifyCode][Verify Code][VerifyCode: {}]", verifyCode);
+        
+        boolean isValid = verifyCodeService.verifyCode(verifyCode, headers);
+        Response<Boolean> response = new Response<>(1, "Verification result", isValid);
+        
+        return ResponseEntity.ok(response);
     }
 }

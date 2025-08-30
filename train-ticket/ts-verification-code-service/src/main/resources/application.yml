@@ -1,5 +1,5 @@
 server:
-  port: 15678  # HTTP (Tomcat) port
+  port: 15678
 
 spring:
   cloud:

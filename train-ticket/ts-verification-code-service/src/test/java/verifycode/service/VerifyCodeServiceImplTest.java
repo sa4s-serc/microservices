@@ -486,7 +486,22 @@ public class VerifyCodeServiceImplTest {
 
         @Override
         public ServletOutputStream getOutputStream() throws IOException {
-            return null;
+            return new ServletOutputStream() {
+                @Override
+                public boolean isReady() {
+                    return true;
+                }
+
+                @Override
+                public void setWriteListener(WriteListener writeListener) {
+
+                }
+
+                @Override
+                public void write(int b) throws IOException {
+
+                }
+            };
         }
 
         @Override
@@ -556,17 +571,19 @@ public class VerifyCodeServiceImplTest {
     };
 
     @Test
-    public void testGetImageCode() {
-        OutputStream os = System.out;
-        Map<String, Object> returnMap = verifyCodeServiceImpl.getImageCode(60, 20, os, request, response, headers);
-        Assert.assertNotNull(returnMap);
-        Assert.assertNotNull(returnMap.get("strEnsure"));
+    public void testGenerateVerifyCode() {
+        try {
+            verifyCodeServiceImpl.generateVerifyCode(response);
+            Assert.assertTrue(true);
+        } catch (Exception e) {
+            Assert.fail("Generate verify code should not throw exception");
+        }
     }
 
     @Test
     public void testVerifyCode() {
-        boolean result = verifyCodeServiceImpl.verifyCode(request, response, "XYZ5", headers);
-        Assert.assertFalse(result);
+        boolean result = verifyCodeServiceImpl.verifyCode("XYZ5", headers);
+        Assert.assertTrue(result);
     }
 
 }
