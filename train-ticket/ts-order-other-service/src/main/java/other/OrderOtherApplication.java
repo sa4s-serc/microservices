@@ -22,9 +22,7 @@ import springfox.documentation.swagger2.annotations.EnableSwagger2;
 @EnableSwagger2
 @EnableDiscoveryClient
 public class OrderOtherApplication {
-
     public static void main(String[] args) {
-
         SpringApplication.run(OrderOtherApplication.class, args);
     }
 

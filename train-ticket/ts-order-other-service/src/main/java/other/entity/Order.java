@@ -21,6 +21,7 @@ import java.util.Date;
 @ToString
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class Order {
+
     @Id
     @Column(length = 36)
     @GeneratedValue(generator = "jpa-uuid")
@@ -28,21 +29,13 @@ public class Order {
 
     private String boughtDate;
 
-
     private String travelDate;
-
 
     private String travelTime;
 
-    /**
-     * Which Account Bought it
-     */
     @Column(length = 36)
     private String accountId;
 
-    /**
-     * Tickets bought for whom....
-     */
     private String contactsName;
 
     private int documentType;
@@ -70,9 +63,9 @@ public class Order {
     public Order(){
         boughtDate = StringUtils.Date2String(new Date(System.currentTimeMillis()));
         travelDate = StringUtils.Date2String(new Date(123456789));
-        trainNumber = "G1235";
+        trainNumber = "K1235";
         coachNumber = 5;
-        seatClass = SeatClass.FIRSTCLASS.getCode();
+        seatClass = SeatClass.HARDSEAT.getCode();
         seatNumber = "1";
         from = "shanghai";
         to = "taiyuan";
@@ -115,5 +108,4 @@ public class Order {
         result = 31 * result + (id == null ? 0 : id.hashCode());
         return result;
     }
-
 }

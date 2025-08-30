@@ -1,9 +1,6 @@
 package other.entity;
 
-import edu.fudan.common.util.StringUtils;
 import lombok.Data;
-
-import java.util.Date;
 
 /**
  * @author fdse
@@ -11,9 +8,6 @@ import java.util.Date;
 @Data
 public class QueryInfo {
 
-    /**
-     * account id
-     */
     private String loginId;
 
     private String travelDateStart;
@@ -32,41 +26,65 @@ public class QueryInfo {
 
     private boolean enableStateQuery;
 
-    public QueryInfo() {
+    public QueryInfo(){
         //Default Constructor
     }
 
-    public void enableTravelDateQuery(String startTime, String endTime) {
+    public String getLoginId() {
+        return loginId;
+    }
+
+    public void setLoginId(String loginId) {
+        this.loginId = loginId;
+    }
+
+    public int getState() {
+        return state;
+    }
+
+    public void enableTravelDateQuery(String startTime, String endTime){
         enableTravelDateQuery = true;
         travelDateStart = startTime;
         travelDateEnd = endTime;
     }
 
-    public void disableTravelDateQuery() {
+    public void disableTravelDateQuery(){
         enableTravelDateQuery = false;
         travelDateStart = null;
         travelDateEnd = null;
     }
 
-    public void enableBoughtDateQuery(String startTime, String endTime) {
+    public void enableBoughtDateQuery(String startTime, String endTime){
         enableBoughtDateQuery = true;
         boughtDateStart = startTime;
         boughtDateEnd = endTime;
     }
 
-    public void disableBoughtDateQuery() {
+    public void disableBoughtDateQuery(){
         enableBoughtDateQuery = false;
         boughtDateStart = null;
         boughtDateEnd = null;
     }
 
-    public void enableStateQuery(int targetStatus) {
+    public void enableStateQuery(int targetStatus){
         enableStateQuery = true;
         state = targetStatus;
     }
 
-    public void disableStateQuery() {
+    public void disableStateQuery(){
         enableTravelDateQuery = false;
         state = -1;
+    }
+
+    public boolean isEnableTravelDateQuery() {
+        return enableTravelDateQuery;
+    }
+
+    public boolean isEnableBoughtDateQuery() {
+        return enableBoughtDateQuery;
+    }
+
+    public boolean isEnableStateQuery() {
+        return enableStateQuery;
     }
 }

@@ -1,12 +1,9 @@
 package other.service;
 
-
 import edu.fudan.common.entity.Seat;
 import edu.fudan.common.util.Response;
+import other.entity.*;
 import org.springframework.http.HttpHeaders;
-import other.entity.Order;
-import other.entity.QueryInfo;
-import other.entity.OrderAlterInfo;
 
 import java.util.Date;
 
@@ -19,27 +16,9 @@ public interface OrderOtherService {
 
     Response create(Order newOrder, HttpHeaders headers);
 
-    Response updateOrder(Order order, HttpHeaders headers);
-
     Response saveChanges(Order order, HttpHeaders headers);
 
     Response cancelOrder(String accountId, String orderId, HttpHeaders headers);
-
-    Response addNewOrder(Order order, HttpHeaders headers);
-
-    Response deleteOrder(String orderId, HttpHeaders headers);
-
-    Response getOrderById(String orderId, HttpHeaders headers);
-
-    Response payOrder(String orderId, HttpHeaders headers);
-
-    Response getOrderPrice(String orderId, HttpHeaders headers);
-
-    Response modifyOrder(String orderId, int status, HttpHeaders headers);
-
-    Response getAllOrders(HttpHeaders headers);
-
-    Response getSoldTickets(Seat seatRequest, HttpHeaders headers);
 
     Response queryOrders(QueryInfo qi, String accountId, HttpHeaders headers);
 
@@ -49,7 +28,25 @@ public interface OrderOtherService {
 
     Response queryAlreadySoldOrders(Date travelDate, String trainNumber, HttpHeaders headers);
 
+    Response getAllOrders(HttpHeaders headers);
+
+    Response modifyOrder(String orderId, int status, HttpHeaders headers);
+
+    Response getOrderPrice(String orderId, HttpHeaders headers);
+
+    Response payOrder(String orderId, HttpHeaders headers);
+
+    Response getOrderById(String orderId , HttpHeaders headers);
+
     Response checkSecurityAboutOrder(Date checkDate, String accountId, HttpHeaders headers);
 
     void initOrder(Order order, HttpHeaders headers);
+
+    Response deleteOrder(String orderId, HttpHeaders headers);
+
+    Response getSoldTickets(Seat seatRequest, HttpHeaders headers);
+
+    Response addNewOrder(Order order, HttpHeaders headers);
+
+    Response updateOrder(Order order, HttpHeaders headers);
 }
