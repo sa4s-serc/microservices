@@ -1,0 +1,48 @@
+MICROSERVICE: statistics-service
+
+  FUNCTIONAL SCOPE:
+  - Captures and manages time-series financial statistics for user accounts
+  - Performs currency normalization and conversion for cross-account comparisons
+  - Calculates aggregate financial metrics (income, expenses, savings) on a daily basis
+  - Stores historical financial data points for trend analysis and reporting
+
+  KEY FEATURES IMPLEMENTED:
+  - Daily statistics aggregation with automatic currency conversion to USD base
+  - Time-series data storage with compound keys (account + date)
+  - Real-time exchange rate fetching and caching
+  - Financial metric calculations (total incomes, expenses, savings amounts)
+  - RESTful API for statistics retrieval and updates
+
+  API RESPONSIBILITIES:
+  - GET /statistics/current - Retrieve authenticated user's statistics
+  - GET /statistics/{accountName} - Retrieve specific account statistics (server scope or demo)
+  - PUT /statistics/{accountName} - Create/update statistics datapoint for account (server scope only)
+  - GET /statistics/demo - Retrieve demo account statistics for UI display
+
+  DATA RESPONSIBILITIES:
+  - Store daily DataPoint records in MongoDB with composite ID (account + date)
+  - Normalize all financial items to USD base currency and daily time periods
+  - Cache exchange rates daily to minimize external API calls
+  - Calculate three core metrics: INCOMES_AMOUNT, EXPENSES_AMOUNT, SAVING_AMOUNT
+  - Maintain time-series history for account lifetime cash flow tracking
+
+  INTEGRATIONS:
+  - Consumes account data from account-service via REST calls
+  - Fetches real-time exchange rates from https://api.exchangeratesapi.io
+  - Integrates with auth-service for OAuth2 token validation
+  - Uses Spring Cloud Config for centralized configuration
+  - Registers with Eureka service discovery for load balancing
+
+  TECHNICAL APPROACH:
+  - Spring Boot microservice with MongoDB persistence
+  - OAuth2 resource server with method-level security (@PreAuthorize)
+  - Feign client with Hystrix fallback for external exchange rate API
+  - Custom MongoDB converters for composite DataPointId serialization
+  - Service discovery and circuit breaker patterns via Spring Cloud
+
+  IMPLEMENTATION NOTES:
+  - Data points are upserted daily (compound ID forces overwrites within same day)
+  - All amounts normalized to USD base currency for consistent comparisons
+  - Exchange rates cached per day to reduce external API dependency
+  - ItemMetric objects store normalized income/expense items with daily amounts
+  - Fallback mechanism handles exchange rate API failures gracefully

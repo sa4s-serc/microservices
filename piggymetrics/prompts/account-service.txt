@@ -1,0 +1,51 @@
+MICROSERVICE: account-service
+
+  FUNCTIONAL SCOPE:
+  - Core financial data management service responsible for managing user accounts, income/expense tracking, and savings data
+  - Serves as the primary data entry point for all financial transactions and account information in the PiggyMetrics system
+
+  KEY FEATURES IMPLEMENTED:
+  - Account creation and management with automatic default savings initialization
+  - Income and expense item tracking with currency and time period support
+  - Savings account management with interest, deposit, and capitalization settings
+  - Account data retrieval for authenticated users and demo accounts
+  - Input validation and data persistence for all financial data
+  - User notes functionality (up to 20,000 characters)
+
+  API RESPONSIBILITIES:
+  - GET /accounts/{name} - Retrieve specific account data (server scope or demo account access)
+  - GET /accounts/current - Get current authenticated user's account data
+  - PUT /accounts/current - Update current authenticated user's account data
+  - POST /accounts/ - Register new account with user creation
+  - GET /accounts/demo - Provide demo account data for UI demonstration
+
+  DATA RESPONSIBILITIES:
+  - Manages Account entities with name (ID), lastSeen timestamp, incomes list, expenses list, savings, and notes
+  - Validates Item entities (title 1-20 chars, amount, currency, time period, icon)
+  - Manages Saving entities (amount, currency, interest rate, deposit/capitalization flags)
+  - Enforces business rules: unique account names, required savings initialization, input validation
+  - Tracks last access time for account activity monitoring
+
+  INTEGRATIONS:
+  - Calls auth-service via Feign client to create user accounts during registration
+  - Calls statistics-service via Feign client to update financial statistics after account changes
+  - Uses MongoDB for account data persistence with Spring Data repositories
+  - Integrates with Spring Cloud Config for externalized configuration
+  - Registers with Eureka service discovery for load balancing and service location
+
+  TECHNICAL APPROACH:
+  - Spring Boot microservice with OAuth2 resource server configuration
+  - MongoDB document storage using Spring Data repositories
+  - Feign clients with Hystrix circuit breaker for service-to-service communication
+  - Bean validation using JSR-303 annotations for data integrity
+  - OAuth2 security with scope-based authorization (@PreAuthorize)
+  - Client credentials grant for service-to-service authentication
+  - Fallback implementations for resilient external service calls
+
+  IMPLEMENTATION NOTES:
+  - Default currency is USD, supports EUR and RUB currencies
+  - New accounts automatically get initialized with zero-amount USD savings
+  - Service requires OAuth2 authentication except for demo endpoints and root registration
+  - Account updates trigger statistics service notifications for real-time analytics
+  - Implements graceful degradation via fallback classes when statistics service is unavailable
+  - Uses distributed tracing and monitoring through Spring Cloud Sleuth integration
