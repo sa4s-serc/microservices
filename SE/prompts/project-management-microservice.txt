@@ -1,0 +1,54 @@
+MICROSERVICE: project-management-microservice
+
+  FUNCTIONAL SCOPE:
+  - Central orchestrator for collaborative project management with hierarchical role-based task breakdown
+  - Manages complete project lifecycle from creation through team assignment to task completion tracking
+  - Enforces strict role-based access control (Project Manager > Team Lead > Team Member hierarchy)
+
+  KEY FEATURES IMPLEMENTED:
+  - Role-based project creation and management with automatic role assignment
+  - Milestone-driven project tracking with sequential stages
+  - Hierarchical team structure with lead assignment and member management
+  - Multi-level task breakdown (Projects → Teams → Tasks → Subtasks)
+  - AI-powered subtask generation using Gemini API integration
+  - Dependency management system with cycle detection and auto-assignment
+  - Real-time progress tracking and completion status updates
+
+  API RESPONSIBILITIES:
+  - Authentication delegation to User Management Service with JWT token management
+  - Project CRUD operations with role validation
+  - Team creation, member assignment, and lead replacement
+  - Task creation and assignment to teams
+  - Subtask lifecycle management including creation, assignment, and completion
+  - Milestone management with sequence-based tracking
+  - Dependency tree visualization and management
+  - Analytics integration for role-specific reporting
+
+  DATA RESPONSIBILITIES:
+  - Maintains SQLite database with normalized schema for projects, teams, tasks, subtasks, milestones, roles, and dependencies
+  - Enforces referential integrity and business rules (no duplicate roles per user per project)
+  - Manages task dependency trees with cycle prevention
+  - Tracks completion percentages and progress metrics
+  - Stores metadata including priorities, due dates, estimated hours, and tags
+
+  INTEGRATIONS:
+  - User Management Service (localhost:8001): Authentication, user details, role validation
+  - Analytics Service (localhost:8003): Progress reports, workload metrics, comprehensive analytics
+  - Notification Service (localhost:5002): Email notifications for role assignments and updates
+  - Gemini AI Service: Automated subtask generation and breakdown suggestions
+
+  TECHNICAL APPROACH:
+  - FastAPI-based REST API with automatic OpenAPI documentation
+  - Layered architecture: API routes → Workflows → Services → Data Access Layer
+  - Role-specific workflow classes (ProjectManagerWorkflow, TeamLeadWorkflow, TeamMemberWorkflow)
+  - JWT authentication with bearer token scheme and global token management
+  - Request/response validation with Pydantic models and enum constraints
+  - Client-service pattern for external integrations with retry logic and caching
+
+  IMPLEMENTATION NOTES:
+  - Strict role enforcement: users can only have one role per project, no role conflicts allowed
+  - Dependency management includes automatic assignment propagation from parent to child subtasks
+  - AI subtask generation includes fallback responses and error handling for service failures
+  - Database uses TEXT primary keys with UUID prefixes for human-readable identifiers
+  - Support for both manual and automated subtask creation with consistent data models
+  - Health check endpoints for service monitoring and status verification

@@ -1,0 +1,47 @@
+MICROSERVICE: notification-microservice
+
+  FUNCTIONAL SCOPE:
+  - Handles asynchronous email notifications and Google Calendar event scheduling
+  - Manages notification queues with persistent storage for reliability
+  - Provides welcome emails for user registration and general notification delivery
+
+  KEY FEATURES IMPLEMENTED:
+  - Email notification creation and delivery via Gmail SMTP
+  - Google Calendar event creation and scheduling
+  - Notification queue processing with batch operations
+  - Health monitoring with service status checks
+  - Persistent notification storage with status tracking
+
+  API RESPONSIBILITIES:
+  - POST /notifications/email: Create and send email notifications
+  - POST /notifications/email/process: Process pending email queue
+  - POST /notifications/calendar: Create calendar events
+  - POST /notifications/calendar/process: Process pending calendar events
+  - GET /notifications/health: Service health and configuration status
+
+  DATA RESPONSIBILITIES:
+  - Manages email_notifications table (user_id, email, subject, body, status, timestamps)
+  - Manages calendar_events table (user_id, email, event details, Google event_id, status)
+  - Tracks notification lifecycle states: pending → sent/failed
+  - Maintains audit trail with created_at and sent_at timestamps
+
+  INTEGRATIONS:
+  - Called by User Management Service for welcome emails after registration
+  - Called by Project Management Service for task/project notifications
+  - Integrates with Gmail SMTP for email delivery (requires EMAIL_USERNAME/EMAIL_PASSWORD)
+  - Integrates with Google Calendar API (requires GOOGLE_CREDENTIALS_FILE)
+  - Runs on port 8004 with REST API endpoints
+
+  TECHNICAL APPROACH:
+  - FastAPI framework with SQLite database for persistence
+  - Queue-based processing with immediate delivery attempt + fallback queuing
+  - Environment-based configuration with .env file support
+  - Comprehensive logging and error handling
+  - CORS enabled for cross-service communication
+
+  IMPLEMENTATION NOTES:
+  - Graceful degradation when external services (Gmail/Google Calendar) are unavailable
+  - Automatic database initialization on startup
+  - Batch processing capabilities for high-volume scenarios
+  - Status tracking enables retry logic and monitoring
+  - Service discovery via environment variables with localhost defaults

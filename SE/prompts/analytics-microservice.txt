@@ -1,0 +1,58 @@
+MICROSERVICE: analytics-microservice
+
+  FUNCTIONAL SCOPE:
+  - Provides analytics and reporting functionality for projects, teams, and users in the task management system
+  - Generates role-based analytics reports with three main types: progress, workload, and comprehensive
+  - Serves as the central intelligence layer for tracking performance metrics and identifying project bottlenecks
+
+  KEY FEATURES IMPLEMENTED:
+  - Multi-level analytics generation (user, team, project scope)
+  - Strategy pattern implementation for different report types (progress, workload, comprehensive)
+  - Role-based access control with permission validation
+  - In-memory caching with TTL for performance optimization
+  - Visualization data generation for charts and graphs
+  - Project health assessment and recommendation engine
+  - Cross-database data access (user and project management databases)
+
+  API RESPONSIBILITIES:
+  - Expose RESTful endpoints for user analytics (/api/analytics/users/{user_id})
+  - Expose team analytics endpoints with required project context (/api/analytics/teams/{team_id})
+  - Expose project analytics endpoints (/api/analytics/projects/{project_id})
+  - Support multiple report types via query parameters (progress, workload, comprehensive)
+  - Provide optional visualization data for frontend chart rendering
+  - Enforce JWT authentication and role-based authorization
+
+  DATA RESPONSIBILITIES:
+  - Read-only access to user management database (users.db) for user details
+  - Read-only access to project management database (project_management.db) for projects, teams, tasks, subtasks, milestones
+  - Calculate completion rates, workload distributions, and performance metrics
+  - Identify resource allocation issues (overallocated/underallocated teams)
+  - Detect project bottlenecks and dependencies blocking progress
+  - Generate health assessments and actionable recommendations
+
+  INTEGRATIONS:
+  - Connects to User Management Service database for user profile information
+  - Connects to Project Management Service database for all project-related data
+  - Uses JWT tokens issued by User Management Service for authentication
+  - Provides analytics data consumed by CLI interface via HTTP requests
+  - No outbound service calls - operates as a data aggregation and analysis service
+
+  TECHNICAL APPROACH:
+  - FastAPI framework with async/await for high performance
+  - Strategy pattern for analytics algorithms (interchangeable progress/workload/comprehensive strategies)
+  - Template method pattern for unified route handling across entity types
+  - Facade pattern providing simplified interface to complex analytics logic
+  - Singleton pattern for cache management with thread-safe implementation
+  - Direct SQLite database access with connection pooling and row factory
+  - In-memory caching with configurable TTL (5-minute default)
+  - Role-based access validation tied to project context
+
+  IMPLEMENTATION NOTES:
+  - Authentication currently uses hard-coded JWT secret for development (needs production configuration)
+  - Database paths are hardcoded to specific directory structure
+  - Caching is in-memory only (production should use Redis)
+  - Permission checking is temporarily disabled in route handlers (commented out for development)
+  - Supports visualization data generation for frontend charts (Chart.js format)
+  - Implements comprehensive error handling with fallback responses
+  - Role hierarchy: Team Members (own data) < Team Leads (team data) < Project Managers (project data)
+  - Calculates advanced metrics: milestone progress, estimated completion dates, workload balance, bottleneck identification

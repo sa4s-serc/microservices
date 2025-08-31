@@ -1,0 +1,1496 @@
+# CLI Task Manager (Microservice Architecture)
+
+A command-line task manager built with Python, using a microservice architecture.
+
+## Architecture
+
+- **CLI (`cli.py`, `task_manager.py`, etc.)**: The main command-line interface. It interacts with all microservices and manages local tasks.
+- **User Management Service (`user-management/`)**: A FastAPI microservice responsible for user registration, login validation, and providing user details. It uses SQLite for data storage.
+- **Project Management Service (`project-management-microservice/`)**: Handles project creation, team management, milestones, and tasks.
+- **Analytics Service (`analytics-microservice/`)**: Provides analytics and reporting functionality for projects, teams, and users.
+- **Notification Service (`notification-microservice/`)**: Handles email notifications and calendar events.
+
+## Features
+
+- **User Management (via Microservice):**
+  - Register new user accounts.
+  - Login/Logout functionality (CLI manages local session state based on service responses).
+  - Secure password storage (hashing) within the user service.
+- **Task Management (CLI-local, requires login):**
+  - Add, remove, and update tasks.
+  - Mark tasks as complete/incomplete.
+  - Filter tasks by status and priority.
+  - Set due dates.
+- **Project Management (via Microservice):**
+  - Create and manage projects.
+  - Create teams and assign team leads.
+  - Create milestones and track progress.
+  - Create tasks and subtasks with dependencies.
+- **Analytics (via Microservice):**
+  - View project, team, and user analytics.
+  - Generate progress and workload reports.
+  - Visualize data with charts.
+- **Notifications (via Microservice):**
+  - Send email notifications.
+  - Schedule calendar events.
+
+## Setup & Running
+
+1.  **Clone Repository:**
+    ```bash
+    git clone <your-repo-url> # Replace with your repo URL
+    cd <repo-folder-name>
+    ```
+
+2.  **Install Dependencies:**
+    Install all dependencies for the CLI and services:
+    ```bash
+    pip install -r requirements.txt
+    ```
+
+3.  **(Optional) Install CLI Tool:**
+    Make the `taskman` command available system-wide:
+    ```bash
+    pip install -e .
+    ```
+
+4.  **Run the Microservices:**
+    
+    **Option 1: Start all services at once (recommended):**
+    
+    Use one of the provided scripts to start all services simultaneously:
+    
+    ```bash
+    # Using Python script (cross-platform)
+    python start_services.py
+    
+    # OR using Bash script (Linux/Mac)
+    # First make it executable
+    chmod +x start_services.sh
+    ./start_services.sh
+    ```
+    
+    To stop all services:
+    ```bash
+    # If using the Python script, press Ctrl+C in the terminal
+    
+    # OR if using the Bash script
+    chmod +x stop_services.sh
+    ./stop_services.sh
+    ```
+    
+    The services will be available at the following URLs:
+    - User Management: http://127.0.0.1:8001/docs
+    - Project Management: http://127.0.0.1:8002/docs
+    - Analytics: http://127.0.0.1:8003/docs
+    - Notification: http://127.0.0.1:8004/docs
+    
+    All log files will be saved to the `logs` directory.
+    
+    **Option 2: Start services manually in separate terminals:**
+    ```bash
+    # User Management Service (port 8001)
+    uvicorn user-management.src.main.main:app --reload --port 8001
+    
+    # Project Management Service (port 8002)
+    uvicorn project-management-microservice.src.main:app --reload --port 8002
+    
+    # Analytics Service (port 8003)
+    uvicorn analytics-microservice.src.main.main:app --reload --port 8003
+    
+    # Notification Service (port 8004)
+    python notification-microservice/run.py
+    ```
+    *(Note: `--reload` is for development. Use a production server like Gunicorn for deployment.)*
+    The service API documentation will be available at `http://127.0.0.1:[port]/docs`.
+
+## Testing
+
+The project includes a comprehensive test suite that tests all microservices. To run the tests:
+
+1. **Start the microservices** using one of the methods described above.
+
+2. **Run the test suite:**
+   ```bash
+   python run_tests.py
+   ```
+   
+   This script will:
+   - Check if all services are running
+   - Offer to start services if they're not running
+   - Run all tests for each microservice
+   - Display a summary of the test results
+
+3. **Run individual test files:**
+   ```bash
+   # Test user management service
+   python -m tests.test_user_service
+   
+   # Test project management service
+   python -m tests.test_project_service
+   
+   # Test analytics service  
+   python -m tests.test_analytics_service
+   
+   # Test notification service
+   python -m tests.test_notification_service
+   ```
+
+The test suite covers core functionality of each microservice, including:
+- User registration and authentication
+- Project creation and management
+- Analytics data retrieval 
+- Email notifications and calendar events
+
+## CLI Usage Commands
+
+Ensure all required microservices are running before using related commands.
+
+### User Management Commands
+
+```bash
+# Register a new user (prompts for details, calls user service)
+taskman register
+
+# Log in (prompts for email/password, calls user service, saves session locally)
+taskman login
+
+# See who is logged in (reads local session, verifies with user service)
+taskman whoami
+
+# Log out (clears local session)
+taskman logout
+```
+
+### Task Management Commands (Local, Requires Login)
+
+```bash
+# Add a task
+taskman task add "Plan microservice integration" --priority high
+
+# List all tasks
+taskman task list
+
+# List only completed tasks
+taskman task list --completed
+
+# List tasks by priority
+taskman task list --priority high
+
+# Mark a task as completed
+taskman task complete <task_id>
+
+# Mark a task as not completed
+taskman task uncomplete <task_id>
+
+# Show task details
+taskman task show <task_id>
+
+# Update a task
+taskman task update <task_id> --description "New description" --priority medium --due "2024-06-01"
+
+# Remove a task
+taskman task remove <task_id>
+```
+
+### Project Management Commands
+
+```bash
+# Create a new project
+taskman project create --name "New Project" --description "Project description"
+
+
+
+# Get project details
+taskman project show <project_id>
+
+# Create a milestone
+taskman project milestone add <project_id> --name "Milestone 1" --description "Description" --sequence 1 --due "2024-06-30"
+
+# List project milestones
+taskman project milestone list <project_id>
+
+# Create a team
+taskman project team create <project_id> --name "Team A" --lead-id <user_id> --type "DEVELOPMENT"
+
+# List teams in a project
+taskman project team list <project_id>
+
+# Add team member
+taskman team member add <team_id> --user-id <user_id>
+
+# Remove team member
+taskman team member remove <team_id> --user-id <user_id>
+
+# Create a task for a team
+taskman team task create <project_id> <team_id> --name "Task name" --description "Description" --priority HIGH --due "2024-06-01"
+
+# List team tasks
+taskman team task list <project_id> <team_id>
+
+# Create a subtask
+taskman task subtask add <task_id> --name "Subtask name" --description "Description" --priority MEDIUM --due "2024-06-01"
+
+# List subtasks
+taskman task subtask list <task_id>
+
+# Auto-generate subtasks using AI
+taskman task subtask auto-generate <task_id> --description "Main task description" [--priority HIGH|MEDIUM|LOW] [--due "2024-06-01"] [--milestone-id <milestone_id>] [--tags "tag1,tag2,tag3"]
+
+# Mark subtask as completed/uncompleted
+taskman subtask complete <subtask_id> [--undo]
+
+# Assign subtask to user
+taskman subtask <subtask_id> assign --user-id <user_id>
+
+# Define dependency between subtasks
+taskman task subtask dependency add <task_id> <subtask_id> <parent_subtask_id>
+
+# View dependency tree
+taskman task dependency-tree <task_id>
+
+# Remove dependency
+taskman subtask dependency remove <task_id> <subtask_id> <parent_subtask_id>
+
+# Replace team lead
+taskman project role update <project_id> <team_id> --new-lead <user_id>
+```
+
+### Analytics Commands
+
+```bash
+# View project analytics
+taskman analytics project <project_id> [--type progress|workload|comprehensive] [--visualize]
+
+# View team analytics
+taskman analytics team <team_id> [--project-id <project_id>] [--type progress|workload|comprehensive] [--visualize]
+
+# View user analytics
+taskman analytics user [--type progress|workload|comprehensive] [--visualize]
+```
+
+### Notification Commands
+
+```bash
+# Send email notification
+taskman notify email send --user-id <user_id> --email <email> --subject "Subject" --body "Message body"
+
+# Process pending email notifications
+taskman notify email process
+
+# Schedule calendar event
+taskman notify calendar schedule --user-id <user_id> --email <email> --summary "Meeting" --description "Description" --start "2024-06-01 10:00" --end "2024-06-01 11:00"
+
+# Process pending calendar events
+taskman notify calendar process
+```
+
+## File Structure Overview
+
+- `cli.py`: Main CLI entry point (uses `requests` to call microservices).
+- `task_manager.py`, `storage.py`, `task.py`: Local task management logic.
+- `start_services.py`: Python script to start all microservices at once.
+- `start_services.sh`: Bash script to start all microservices at once.
+- `stop_services.sh`: Bash script to stop all microservices.
+- `run_tests.py`: Python script to run all tests for the microservices.
+- `tests/`: Directory containing test files for each microservice.
+  - `test_user_service.py`: Tests for user management service.
+  - `test_project_service.py`: Tests for project management service.
+  - `test_analytics_service.py`: Tests for analytics service.
+  - `test_notification_service.py`: Tests for notification service.
+- `user-management/`:
+  - `src/main/`:
+    - `main.py`: FastAPI app entry point.
+    - `api/`: FastAPI routers and endpoints.
+    - `services/`: Business logic (e.g., `auth_service.py`).
+    - `models/`: Database interaction (e.g., `user_model.py`).
+    - `schemas/`: Pydantic data models.
+    - `core/`: Configuration.
+    - `data/`: Contains `users.db`.
+- `project-management-microservice/`:
+  - `src/`:
+    - `main.py`: FastAPI app entry point.
+    - `api/`: API routes and controllers.
+    - `models/`: Data models.
+    - `services/`: Business logic.
+    - `database/`: Database management.
+    - `workflow/`: Business workflows.
+- `analytics-microservice/`:
+  - `src/main/`:
+    - `main.py`: FastAPI app entry point.
+    - `api/`: API routes for analytics.
+    - `services/`: Analytics services.
+    - `models/`: Data models.
+- `notification-microservice/`:
+  - `src/main/`:
+    - `main.py`: FastAPI app entry point.
+    - `api/`: API endpoints for notifications.
+    - `services/`: Email and calendar services.
+    - `schemas/`: Data models.
+- `requirements.txt`: All Python dependencies.
+- `setup.py`: Project setup script.
+
+Contents: 
+  
+ 
+ 
+Task 1: Requirements and Subsystems 
+ 
+ 
+ 
+Task 2: Architecture Framework 
+ 
+ 
+ 
+Task 3: Architectural Tactics and Patterns 
+ 
+ 
+ 
+Task 4a: Prototype Implementation 
+ 
+ 
+ 
+Task 4b: Architecture Analysis 
+ 
+
+User management-microservice, 
+CLI 
+
+
+Task 1: Requirements and Subsystems
+1a. Functional Requirements
+Functional requirements define the expected behaviors and services the system must provide to fulfill 
+user and business needs. In this CLI-based collaborative task management system, functional 
+requirements revolve around multi-role project coordination, task breakdown, user access, and data 
+analytics.
+1. User Registration, Login, and Logout
+Requirement Description: Users should be able to register a new account, log into the system, and 
+securely log out. This is the entry point to all functionalities and requires proper identity 
+verification.
+Interaction: Handled via CLI interface.
+Microservice Involved: User Management Microservice (external interface).
+Architectural Significance: Critical for enabling secure and personalized access. Ties directly to 
+authentication and session management, impacting all subsequent role-based functionalities.
+2. Project Creation
+Requirement Description: Any registered user can create a project. Upon project creation, the user 
+must assign a project manager from the existing users. If not explicitly assigned, the user creating 
+the project becomes the default project manager.
+Behavior:
+Fetch list of available users without existing roles in the project.
+Assign project manager.
+Initialize project record.
+Architectural Significance: Central to the entire workflow structure. Requires integration with user 
+management, project storage, and role assignment mechanisms.
+3. Milestone Management
+Requirement Description: Project Managers must define milestones that represent stages of 
+project completion (e.g., Design, Development, Testing). All subtasks will move through these 
+milestones.
+Behavior:
+Create, list, update, or remove milestones.
+Map subtask transitions to milestones.
+Architectural Significance: Enables pipeline-style tracking and status monitoring. Requires strong 
+relational mapping between task data and milestone states.
+Task 1: Requirements and Subsystems
+1
+
+
+4. Team Creation and Management
+Requirement Description: Project Managers must create teams for their projects. A team must 
+have:
+One Team Lead (from users without a role in the project).
+Optional Team Members (again, users without roles in the same project).
+Behavior:
+Create teams.
+Assign team leads.
+Add/remove team members.
+Architectural Significance: Tightly coupled with user-role binding at the project level. Needs data 
+consistency and strong validation to prevent overlapping roles in a single project.
+5. Task Assignment and Breakdown
+Main Task: Assigned by Project Manager to each team (only one per team).
+Subtasks: Defined by Team Leads. These represent actionable units of work.
+Behavior:
+Decompose main task into subtasks.
+Optionally specify dependency by referring to subtask ID.
+Assign subtasks to team members (1:1 mapping).
+Allow multiple tasks per member.
+Architectural Significance: Complex nested relationships between main task, subtasks, users, and 
+dependencies. Requires normalized data models and consistency checks.
+6. Subtask Progress Updates
+Requirement Description: Team Members must be able to update the status of their assigned 
+subtasks (e.g., Not Started, In Progress, Blocked, Completed).
+Behavior:
+View current assigned tasks.
+Update progress via CLI commands.
+Architectural Significance: Impacts milestone tracking, analytics, and downstream notification 
+mechanisms. Needs transaction safety and auditability.
+7. Role-Based Access Control (RBAC)
+Requirement Description: Users can have different roles in different projects:
+Project Manager: Full access to all teams, tasks, analytics.
+Task 1: Requirements and Subsystems
+2
+
+
+Team Lead: Access to their team's subtasks and members.
+Team Member: Access only to their assigned subtasks.
+Behavior:
+Role assignment scoped per project.
+Prevents multiple roles for a single user in one project.
+Architectural Significance: Drives access control checks across all commands and service 
+interactions. Needs consistent enforcement at CLI and service levels.
+8. Analytics and Reporting
+Requirement Description: Role-specific analytics must be made available:
+Team Member → View own progress and pending subtasks.
+Team Lead → View team-wide task statuses and timelines.
+Project Manager → Project-wide analytics with drill-down into teams and individuals.
+Behavior:
+Fetch analytics via interface.
+Display as CLI report.
+Microservice: Analytics Microservice (external interface).
+Architectural Significance: Requires robust data aggregation, role-based filtering, and API 
+integration.
+9. AI-Based Subtasks Automation
+The system should integrate AI services for:
+Recommending subtask decomposition based on main task descriptions.
+Identifying potential dependencies between subtasks.
+Architectural Significance: Depends on integration with the AI service. Requires data pipelines 
+from Task services.
+10. CLI-Based User Interface
+Requirement Description: All features are accessed through a command-line interface. Users must 
+be guided via structured prompts, auto-complete, and help documentation.
+Behavior:
+Support for interactive sessions.
+Help commands for each functionality.
+Task 1: Requirements and Subsystems
+3
+
+
+Architectural Significance: Usability concern; impacts user experience and command parser 
+design.
+11. Dependency Management System 
+Requirement Description: Team Leads can define and manage dependencies between subtasks.
+Behavior:
+# As implemented in DependencyTree class
+Add dependencies between subtasks
+Remove dependencies
+Prevent cyclic dependencies
+Validate dependency trees
+Architectural Significance: Critical for task scheduling and milestone progression.
+12. Notification Management
+Requirement Description: System must notify users about registration, task assignments, updates, 
+and milestone changes
+Behaviors:
+# Notification Types
+Registration Successful mail
+Milestone completion updates
+Task status updates
+Team role assignments
+Architectural Significance: Requires real-time event processing and message delivery
+1b. Non-functional Requirements
+1. Usability
+The system operates via a Command Line Interface.
+CLI commands should be intuitive and follow consistent naming conventions.
+Error messages and help prompts should guide users clearly.
+Architectural Significance: Impacts CLI design layer, command dispatcher, and user help 
+documentation systems.
+2. Performance
+Real-time progress updates and analytics query responses should be swift (<1 sec for small 
+queries).
+Task 1: Requirements and Subsystems
+4
+
+
+Architectural Significance: Affects database indexing, caching, and internal communication 
+between microservices.
+3. Scalability
+The system should scale horizontally to accommodate growing teams and project complexity.
+Microservices should support container-based deployment (e.g., Docker, Kubernetes).
+Architectural Significance: Involves stateless microservice design and distributed task 
+management.
+4. Security
+Passwords and authentication tokens must be securely stored and transmitted.
+Role-based data access must be strictly enforced across services.
+Architectural Significance: Influences API gateway design, encryption, and validation middleware.
+5. Reliability and Fault Tolerance
+Failures in any microservice (e.g., Analytics or AI) must not crash the core CLI application.
+Retriable API logic and backup mechanisms must be in place.
+Architectural Significance: Requires circuit breakers, fallback strategies, and error propagation 
+handling.
+6. Extensibility
+System design must allow easy addition of new analytics types, user roles, or AI features.
+Architectural Significance: Influences interface definitions, use of plug-in architecture, and 
+service contracts.
+7. Data Consistency 
+Requirements:
+Atomic database operations
+Transaction management
+Referential integrity
+Architectural Significance: Ensures data reliability across microservices.
+8. Caching Strategy 
+Requirements:
+Cache frequently accessed analytics data
+Cache invalidation on updates
+Distributed cache management
+Task 1: Requirements and Subsystems
+5
+
+
+Architectural Significance: Improves system performance and response times.
+2. Subsystem Overview
+1. User Management Subsystem
+Handles registration, login, logout, and retrieval of user lists.
+External microservice used by the Project Management module via an integration class.
+Functionality:
+Secure user authentication.
+User information retrieval and availability checks.
+2. Project Management Subsystem
+Central microservice for creating projects, defining milestones, and managing roles.
+Functionality:
+Project creation and milestone management.
+Assigning project managers, team leads, and team members.
+Enforcing project-specific roles and access.
+Team Management Subsystem
+Handles team creation and member assignments.
+Functionality:
+Creating teams per project.
+Role assignment ensuring no conflicts.
+Interface with User Management to fetch valid users.
+Access Control
+Governs RBAC enforcement.
+Functionality:
+Validates user permissions before actions.
+Ensures role-based data visibility.
+Prevents conflicting or duplicate assignments.
+3. Task Management Subsystem
+Responsible for managing main tasks, breaking them into subtasks, and tracking progress.
+Functionality:
+Task creation and dependency linking.
+Task 1: Requirements and Subsystems
+6
+
+
+Subtask assignment and update.
+Task status tracking through milestone stages.
+AI-Assisted Subtask Breakdown
+Integrates with AI service to support automation features.
+Functionality:
+Suggesting subtasks based on description analysis.
+Predicting priorities of tasks.
+4. Analytics Subsystem
+Fetches user, team, and project-level reports.
+Interfaces with the Analytics Microservice.
+Functionality:
+Data aggregation and reporting based on role.
+Fetching productivity, progress, and timeline reports.
+6. CLI Interaction Subsystem
+Parses user input and dispatches commands to relevant services.
+Functionality:
+Command interpretation and validation.
+Context-sensitive help system.
+Output formatting for user-friendly responses.
+7. Notification Subsystem 
+Functionality:
+- Welcome mail after Registration
+- Notification templating
+Integration Points:
+Project Management Service -> Notification Service
+Team Management Service -> Notification Service
+Task Management Service -> Notification Service
+Features:
+Asynchronous notification processing
+Template-based message formatting
+Task 1: Requirements and Subsystems
+7
+
+
+Notification history maintenance
+Task 1: Requirements and Subsystems
+8
+
+
+Task 2: Architecture Framework
+1. Stakeholder Identification (Based on IEEE 42010 Standard)
+1.1 Identified Stakeholders
+Stakeholder
+Description
+End Users
+Project managers (manage projects/teams), team leads (manage
+subtasks/team members), team members (execute subtasks)
+System Administrators
+Manage microservices deployment, caching systems (Redis),
+databases (SQLite)
+Product Owner
+Defines analytics requirements, milestone tracking, and project
+workflows
+Developers
+Build microservices (Project, Analytics, User Management),
+implement caching strategies
+Security Engineers
+Implement JWT authentication, role-based access, data encryption
+Analyst
+Design analytics algorithms, caching strategies, and reporting
+systems
+QA/Test Engineers
+Validate microservices integration, analytics accuracy, cache
+consistency
+1.2 Stakeholder Concerns and Viewpoints
+Stakeholder
+Concern
+Viewpoint
+Description
+End Users
+Role-specific analytics access,
+milestone tracking, task
+dependencies
+Analytics Access
+View
+Shows analytics permissions,
+data visibility per role
+System Admins
+Cache performance, database
+scaling, service monitoring
+Infrastructure View
+Details Redis caching, database
+sharding, monitoring points
+Product Owner
+Analytics accuracy, milestone
+tracking, team performance
+Analytics
+Dashboard View
+Displays KPIs, project health,
+resource utilization
+Developers
+Service communication, cache
+invalidation, event handling
+Integration View
+Shows service interactions,
+cache strategies, event flows
+Security
+Engineers
+Role hierarchy, token validation,
+analytics access control
+Security
+Architecture View
+Details authentication flow,
+permission checks
+Analysts
+Data aggregation, caching strategies,
+real-time updates
+Analytics Pipeline
+View
+Shows data flow, calculation
+methods, caching points
+QA Engineers
+Analytics validation, cache
+consistency, role-based testing
+Test Coverage View
+Maps test scenarios, validation
+points
+2. Major Design Decisions (ADRs)
+Task 2: Architecture Framework
+1
+
+
+ADR-01: Microservices Architecture
+Context: System requires independent scaling, clear service boundaries, and separate deployment 
+capabilities.
+Decision: Implement four distinct microservices:
+User Management Service
+Project Management Service
+Analytics Service
+Notification Service
+Status: Implemented
+Rationale: 
+Service Independence
+Isolated Data Management
+Technology Flexibility
+Clear Service Boundaries
+Consequences
+Positive:
+Independent scaling
+Clear service boundaries
+Isolated deployments
+Technology flexibility
+Negative:
+Increased complexity
+Network overhead
+Service coordination needed
+ADR-02: Role-Based  Access
+Context: Different roles need different analytics views and permissions.
+Decision: Implement hierarchical role-based access with project context.
+Status: Implemented
+Rationale:
+Project-specific role assignments
+Clear analytics access hierarchy
+Flexible permission management
+Task 2: Architecture Framework
+2
+
+
+Consequences:
+Complex permission checking logic
+Multiple role resolution paths
+Need efficient role caching
+ADR-03: Layered Architecture Pattern
+Context: System needs clear separation of concerns and maintainable codebase.
+Decision: Implement layered architecture (API, Service, Data Access layers).
+Status: Implemented
+Rationale:
+Clear separation of concerns
+Easier testing and maintenance
+Modular component design
+Consequences:
+Need clear interface definitions
+Must manage layer dependencies
+Potential performance overhead
+ADR-04: JWT-Based Authentication
+Context: Need secure, stateless authentication across microservices.
+Decision: Implement JWT token authentication with bearer scheme.
+Status: Implemented
+Rationale:
+Stateless authentication
+Built-in expiration mechanism
+Easy integration with microservices
+Consequences:
+Need token renewal strategy
+Must secure token storage
+Requires key management
+ADR-05: Analytics Caching Strategy
+Context: Need efficient analytics retrieval with minimal calculation overhead.
+Decision: Implement multi-level caching with Redis.
+Task 2: Architecture Framework
+3
+
+
+Status: Implemented
+Rationale:
+Reduced calculation overhead
+Faster response times
+Configurable cache invalidation
+Consequences:
+Must manage cache consistency
+Need cache warming strategy
+Requires monitoring and scaling
+Task 2: Architecture Framework
+4
+
+
+Task 3: Architectural Tactics and 
+Patterns
+3a. Architectural Tactics
+1. Performance Tactics
+1.1 Response Time Optimization
+Real-time Task Updates
+Cache task status changes using Redis
+Implement WebSocket for live updates
+Use optimistic UI updates for instant feedback
+Analytics Processing
+Pre-calculate common analytics metrics
+Implement incremental updates
+Use materialized views for complex reports
+class AnalyticsCache:
+    def __init__(self):
+        self.cache = {}
+        self.ttl = {} # Time to live for each cache entry
+        
+    async def get_cached_analytics(self, key: str) -> Optional[Dict]:
+        if self.is_cache_valid(key):
+            return self.cache.get(key)
+        return None
+Query Optimization
+class DataAccess:
+    def get_project_metrics(self, project_id: str):
+        return self.db.query("""
+            SELECT 
+                t.id,
+                COUNT(st.id) as total_subtasks,
+                SUM(CASE WHEN st.completed THEN 1 ELSE 0 END) as completed_subtasks
+            FROM tasks t
+            LEFT JOIN subtasks st ON t.id = st.task_id
+            WHERE t.project_id = :project_id
+Task 3: Architectural Tactics and Patterns
+1
+
+
+            GROUP BY t.id
+        """)
+1.2 Resource Management
+class ResourceManager:
+def init(self):
+self.connection_pool = ConnectionPool(max_size=20)
+self.rate_limiter = RateLimiter(max_requests=100)
+Database Access
+Connection pooling for database connections
+Query optimization for task hierarchies
+Implement database sharding by project
+rate limiter for avoiding overload of database
+Memory Management
+LRU caching for frequently accessed tasks
+Batch processing for bulk operations
+Memory-efficient data structures
+2. Reliability Tactics
+2.1 Fault Detection
+Service Health Monitoring
+class HealthCheck:
+  def checkServiceHealth(self):
+    - Monitor service latency
+    - Track error rates
+    - Measure resource utilization
+3. Security Tactics
+3.1 Authentication & Authorization
+Multi-level Security
+JWT with refresh tokens
+Role-based access (RBAC)
+Task 3: Architectural Tactics and Patterns
+2
+
+
+Permission inheritance in project hierarchy
+class SecurityManager:
+    async def validate_access(self, user_id: str, resource_type: str, resource_id: str):
+        # Check role-based permissions
+        if resource_type == "project":
+            return await self.check_project_manager_access(user_id, resource_id)
+        elif resource_type == "team":
+            return await self.check_team_lead_access(user_id, resource_id)
+3.2 Data Protection
+Task Data Security
+Field-level encryption
+Audit logging of all changes
+Data masking for sensitive info
+3.3 API Security
+Request Validation
+API rate limiting
+Request sanitization
+Schema validation
+4. Scalability Tactics
+4.1 Horizontal Scaling
+Microservices Architecture
+4.2 Data Partitioning
+Project-based Sharding
+Partition by project ID
+Team-level data isolation
+Cross-partition analytics
+4.3 Load Distribution
+DB rate limiting
+5. Maintainability Tactics
+5.1 Code Organization
+Task 3: Architectural Tactics and Patterns
+3
+
+
+Clean Architecture
+5.2 System Monitoring
+Observability
+Metric aggregation
+Log correlation
+6. Extensibility Tactics
+6.1 Plugin Architecture
+Analytics Extensions
+class AnalyticsPlugin:
+  def registerMetric(self):
+    - Custom metric registration
+    - Visualization options
+    - Data source integration
+6.2 Integration Points
+Event System
+Task lifecycle events
+Team composition changes
+Project milestone updates
+7. Availability Tactics
+7.1 Fault Detection
+class HealthCheck:
+    async def check_service_health(self):
+        metrics = {
+            "database": await self.check_db_connection(),
+            "cache": await self.check_cache_status(),
+            "api_endpoints": await self.check_endpoints()
+        }
+        return metrics
+8. Usability Tactics
+8.1 Task Management CLI
+Task 3: Architectural Tactics and Patterns
+4
+
+
+Clean naming conventions
+structured prompts
+auto-complete
+8.2 Error Handling
+logging
+Implementation Examples:
+Cache Implementation
+class TaskCache:
+    def __init__(self):
+        self.redis_client = RedisClient()
+    def get_task(self, task_id: str):
+        if cached := self.redis_client.get(f"task:{task_id}"):
+            return cached
+        return self.fetch_and_cache_task(task_id)
+Analytics Processing
+class AnalyticsProcessor:
+    def process_team_analytics(self, team_id: str):
+        with self.lock_manager.acquire(f"team:{team_id}"):
+            metrics = self.calculate_team_metrics(team_id)
+            self.cache_manager.store_metrics(team_id, metrics)
+Authorization Check
+class AuthorizationManager:
+    def check_task_access(self, user_id: str, task_id: str):
+        task = self.task_repository.get(task_id)
+        return self.rbac.has_permission(
+            user_id=user_id,
+            resource_type="task",
+            resource_id=task_id,
+            action="view"
+        )
+These tactics provide a robust foundation for building a scalable, secure, and maintainable task 
+management system.
+Task 3: Architectural Tactics and Patterns
+5
+
+
+3b. Implementation Patterns in Task Management 
+System
+Based on the codebase, here are the key design patterns implemented:
+1. Strategy Pattern (Analytics Service)
+Purpose
+Defines family of algorithms for different analytics types
+Makes analytics algorithms interchangeable
+Allows runtime selection of appropriate analytics strategy
+2. Template Method Pattern (Route Handling)
+Purpose
+Task 3: Architectural Tactics and Patterns
+6
+
+
+Defines skeleton of analytics route handling
+Allows subclasses to override specific steps
+Maintains consistent request processing flow
+3. Facade Pattern (Analytics Interface)
+Purpose
+Provides unified interface to analytics subsystem
+Simplifies client interaction with complex analytics logic
+Decouples client code from analytics implementation
+4. Singleton Pattern (Cache Management)
+Purpose
+Ensures single cache instance across application
+Centralizes cache management
+Provides global access point to cache
+Pattern Interactions
+Task 3: Architectural Tactics and Patterns
+7
+
+
+Implementation Benefits
+1. Modularity
+Clear separation of concerns
+Easy to add new analytics types
+Independent service evolution
+2. Maintainability
+Consistent request handling
+Centralized caching logic
+Standardized analytics interface
+3. Flexibility
+Swappable analytics strategies
+Extensible route handling
+Configurable caching
+4. Performance
+Efficient caching
+Optimized data access
+Reduced computation overhead
+These patterns work together to create a robust and maintainable analytics system that can easily 
+scale and adapt to new requirements.
+Task 3: Architectural Tactics and Patterns
+8
+
+
+C4 Model for Collaborative Task Management System
+1. System Context Diagram
+Context Diagram Description
+1. User Interaction
+Users interact through CLI commands
+Three distinct roles: Project Manager, Team Lead, Team Member
+Role-based access control per project
+2. Core Systems
+CLI Interface: Primary user interaction point
+Task creation and management
+Project workflow control
+Analytics retrieval
+Task 3: Architectural Tactics and Patterns
+9
+
+
+Project Management Service
+Project and milestone management
+Team creation and member assignment
+Task and subtask handling
+Dependency management
+Analytics Service
+Role-based analytics access
+Performance metrics
+Progress tracking
+User Management Service
+Authentication
+User profile management
+Role verification
+Notification service
+email system
+ welcome mail after each registration.
+2. Container Diagram
+Container Diagram Description
+1. CLI Application
+Task 3: Architectural Tactics and Patterns
+10
+
+
+Command Handler
+Processes user input using Click framework
+Validates command syntax
+Routes to appropriate workflow
+Workflow Manager
+Implements role-based workflows
+Handles business logic sequencing
+Manages service interactions
+2. Project Management Service
+API Layer
+RESTful endpoints using FastAPI
+Request validation
+Response formatting
+Service Layer
+Core business logic
+Role verification
+Task state management
+Data Access Layer
+SQLite database operations
+Data model mapping
+Query optimization
+3. Database Schema
+Projects(id, name, created_at, updated_at)
+Teams(id, project_id, name)
+Tasks(id, team_id, title, description, status)
+Subtasks(id, task_id, title, status, assigned_to, dependency_id)
+Milestones(id, project_id, name, sequence)
+UserRoles(user_id, project_id, role)
+4. Key Features
+Project milestone management
+Team creation and role assignment
+Task dependency tracking
+Task 3: Architectural Tactics and Patterns
+11
+
+
+Role-based analytics access
+Local data persistence
+This architecture reflects the actual codebase organization and supports all required functionality 
+through the CLI interface.
+Component Diagrams for Each Microservice
+1. Project Management Microservice Component Diagram
+Project Management Component Description
+1. CLI Interface
+Entry point for all user commands
+Role-based command access control
+Command routing to appropriate services
+2. Core Services
+Project Service: Project CRUD and management
+Team Service: Team creation and member management
+Task Service: Task and subtask operations
+Milestone Service: Project milestone management
+Role Service: Role assignment and verification
+3. Data Access Layer
+Abstracts database operations
+Handles data persistence
+Maps data to domain models
+4. External Service Clients
+Task 3: Architectural Tactics and Patterns
+12
+
+
+Analytics Client: Interfaces with Analytics service
+User Management Client: Handles auth operations
+2. Analytics Microservice Component Diagram
+Analytics Component Description
+1. API Layer
+Role-specific endpoints
+Request validation
+Response formatting
+2. Analytics Services
+User Analytics: Individual performance metrics
+Team Analytics: Team performance and workload
+Project Analytics: Project-wide metrics
+3. Data Access
+Cache Manager: Performance optimization
+Data Access Layer: Data retrieval logic
+4. Utils
+Auth Utils: Permission verification
+Analytics Utils: Calculation helpers
+3. User Management Microservice Component Diagram
+Task 3: Architectural Tactics and Patterns
+13
+
+
+User Management Component Description
+1. API Layer
+Authentication endpoints
+User profile management
+Token validation
+2. Services
+Auth Service: Authentication logic
+User Service: User operations
+Token Service: JWT management
+3. Data Access
+User DAL: User data operations
+Secure password handling
+Profile management
+4.Notification Microservice Component Diagram
+Task 3: Architectural Tactics and Patterns
+14
+
+
+Component Description
+1. FastAPI Application
+Main application entry point ( main.py )
+Handles CORS configuration
+Provides health check endpoint
+Routes requests to notification API
+2. Notification API ( api/endpoints/notification.py )
+Handles email notification endpoints
+Provides queue processing endpoints
+3. Email Service ( services/email_service.py )
+Manages email sending functionality
+Processes pending email notifications
+Requires Gmail SMTP credentials
+4. Environment Loader ( utils/env_loader.py )
+Loads required environment variables
+Validates email credentials
+Supports configuration management
+Task 3: Architectural Tactics and Patterns
+15
+
+
+Task 4a: Prototype Implementation
+1. System Architecture
+1.1 Microservices
+- User Management Service (Port 8001)
+- Project Management Service (Port 8002)
+- Analytics Service (Port 8003)
+- Notification Service (Port 8004)
+1.2 File Structure
+project-root/
+├── cli.py                              # Main CLI interface
+├── start_services.py                   # Service orchestration
+├── user-management/                    # User auth & management
+├── project-management-microservice/    # Project & task management
+├── analytics-microservice/             # Analytics & reporting
+└── notification-microservice/          # Notifications handling
+2. Database Schema
+2.1 Project Management Database
+CREATE TABLE projects (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    description TEXT,
+    status TEXT NOT NULL,
+    project_manager_id TEXT NOT NULL
+);
+CREATE TABLE teams (
+    id TEXT PRIMARY KEY,
+    project_id TEXT NOT NULL,
+    name TEXT NOT NULL,
+    team_lead_id TEXT NOT NULL,
+    FOREIGN KEY (project_id) REFERENCES projects(id)
+);
+CREATE TABLE tasks (
+Task 4a: Prototype Implementation
+1
+
+
+    id TEXT PRIMARY KEY,
+    project_id TEXT NOT NULL,
+    team_id TEXT NOT NULL,
+    name TEXT NOT NULL,
+    description TEXT,
+    status TEXT NOT NULL,
+    priority TEXT NOT NULL,
+    FOREIGN KEY (project_id) REFERENCES projects(id)
+);
+CREATE TABLE subtasks (
+    id TEXT PRIMARY KEY,
+    task_id TEXT NOT NULL,
+    name TEXT NOT NULL,
+    description TEXT,
+    status TEXT NOT NULL,
+    priority TEXT NOT NULL,
+    FOREIGN KEY (task_id) REFERENCES tasks(id)
+);
+3. Core Features Implementation
+3.1 Project Management Service
+class ProjectService:
+    def createProject(self, project: Project) -> Project:
+        """Creates new project"""
+        project_dict = project.to_dict()
+        return self.project_dal.add_project(project_dict)
+    def getProjectTeams(self, projectId: UUID) -> List[Team]:
+        """Fetches teams in a project"""
+        return self.team_dal.get_teams_by_project(str(projectId))
+3.2 Task Management Service
+class TaskManagerService:
+    def __init__(self, subtask_dal: SubtaskDAL = None):
+        self.subtask_dal = subtask_dal or SubtaskDAL()
+        self.dependency_tree_dal = DependencyTreeDAL()
+    def getSubtaskbyId(self, subtaskId: UUID) -> dict:
+        """Get subtask by ID"""
+Task 4a: Prototype Implementation
+2
+
+
+        subtask = self.subtask_dal.get_subtask(subtaskId)
+        if not subtask:
+            raise ValueError(f"Subtask with ID {subtaskId} not found")
+        return subtask
+3.3 Analytics Service
+class AnalyticsService:
+    def __init__(self):
+        self.cache = CacheService()
+    async def generate_project_analytics(self, project_id: str):
+        """Generates project analytics"""
+        cached = await self.cache.get(f"project_{project_id}")
+        if cached:
+            return cached
+        data = await self._generate_fresh_analytics(project_id)
+        await self.cache.set(f"project_{project_id}", data)
+        return data
+4. CLI Commands Implementation
+4.1 Project Management Commands
+# Project Operations
+taskman project create --name "Project Name" --description "Description"
+taskman project list
+taskman project show <project_id>
+# Team Operations
+taskman project team create <project_id> --name "Team Name" --lead-id <user_id>
+taskman team member add <team_id> --user-id <user_id>
+4.2 Task Management Commands
+# Task Operations
+taskman team task create <project_id> <team_id> --name "Task"
+taskman task subtask add <task_id> --name "Subtask"
+taskman subtask assign <subtask_id> --user-id <user_id>
+# Dependency Management
+Task 4a: Prototype Implementation
+3
+
+
+taskman subtask dependency add <task_id> <subtask_id> <parent_subtask_id>
+taskman task dependency-tree <task_id>
+4.3 Analytics Commands
+# Analytics Views
+taskman analytics project <project_id> --type [progress|workload|comprehensive]
+taskman analytics team <team_id> --project-id <project_id>
+taskman analytics user --type [progress|workload|comprehensive]
+5. Service Integration
+5.1 Authentication Implementation
+def get_auth_token() -> str | None:
+    """Retrieves authentication token"""
+    if not os.path.exists(TOKEN_FILE_PATH):
+        return None
+    with open(TOKEN_FILE_PATH, 'r') as f:
+        return f.read().strip()
+5.2 Service Communication
+class ServiceClient:
+    def _make_request(self, method: str, endpoint: str, data: Dict = None):
+        """Makes HTTP request with retry logic"""
+        headers = {
+            "Authorization": f"Bearer {self._get_token()}",
+            "Content-Type": "application/json"
+        }
+        response = requests.request(method, endpoint, json=data, headers=headers)
+        return response.json()
+6. Features and Capabilities
+6.1 Implemented Features
+1. User Management
+Registration
+Authentication
+Session management
+Task 4a: Prototype Implementation
+4
+
+
+2. Project Management
+Project CRUD operations
+Team management
+Task/Subtask handling
+3. Task Dependencies
+Dependency creation/removal
+Dependency tree visualization
+Cycle detection
+4. Analytics
+Project progress tracking
+Team performance metrics
+User workload analysis
+6.2 Role-Based Access
+class RoleService:
+    async def validate_permission(self, user_id: str, project_id: str):
+        role = await self.get_user_role(user_id, project_id)
+        if not self.has_permission(role):
+            raise InsufficientPermissions()
+This implementation provides:
+Clear service boundaries
+Robust authentication
+Role-based access control
+Dependency management
+Real-time analytics
+Command-line interface
+Data persistence
+Error handling
+Task 4a: Prototype Implementation
+5
+
+
+Task 4b: Architecture Analysis
+1. Architecture Comparison
+Microservices vs Monolithic
+Current Architecture (Microservices)
+Task 4b: Architecture Analysis
+1
+
+
+Alternative Architecture (Monolithic)
+2. Quantitative Analysis
+Response Time Analysis and Throughput Analysis:
+Task 4b: Architecture Analysis
+2
+
+
+3. Performance Metrics Table
+Metric
+Microservices
+Monolithic
+Difference
+Avg Response Time
+180ms
+100ms
+-44.4%
+Memory Usage
+30%
+60%
++100%
+Deployment Time
+10 min
+2 min
+-80%
+Database Connections
+15-20
+5-8
+-60%
+Task 4b: Architecture Analysis
+3
+
+
+Initial Load Time
+200ms
+100ms
+-50%
+4. Architecture Trade-offs
+Current Microservices Architecture
+Pros
+1. Scalability
+Independent service scaling
+Resource optimization
+Better load handling
+2. Maintainability
+Isolated codebases
+Easy to understand components
+Independent deployments
+3. Technology Flexibility
+Different tech stacks possible
+Easy to upgrade components
+Independent development
+Cons
+1. Complexity
+Complex deployment
+Network overhead
+Multiple databases
+2. Resource Usage
+Higher total resource usage
+Multiple instances running
+Multiple databases
+3. Development Overhead
+Complex testing
+Service coordination
+API versioning
+Monolithic Architecture
+Pros
+1. Simplicity
+Task 4b: Architecture Analysis
+4
+
+
+Single codebase
+Easier deployment
+Simpler testing
+2. Performance
+Lower latency
+Direct method calls
+Single database
+3. Resource Efficiency
+Shared resources
+Single deployment unit
+Lower overhead
+Cons
+1. Scalability
+Must scale entire application
+Resource constraints
+Limited flexibility
+2. Maintenance
+Complex codebase
+Harder to understand
+Risky deployments
+3. Technology Lock-in
+Single tech stack
+Difficult to modernize
+All or nothing updates
+5. Development Cost Analysis
+Aspect
+Microservices
+Monolithic
+Initial Development
+6 weeks
+4 weeks
+Team Size Required
+4-5 developers
+2-3 developers
+Infrastructure Cost
+$2000/month
+$800/month
+Maintenance (monthly)
+40 hours
+20 hours
+Testing Effort
+High
+Medium
+6. Recommendations
+1. Short Term (1-6 months)
+Task 4b: Architecture Analysis
+5
+
+
+Maintain current microservices
+Optimize service communication
+Improve monitoring
+2. Medium Term (6-12 months)
+Consider hybrid approach
+Consolidate similar services
+Improve deployment automation
+3. Long Term (12+ months)
+Base architecture on scale:
+<100K users: Consider monolithic
+100K users: Keep microservices
+Regular architecture reviews
+Performance monitoring
+7. Key Decision Factors
+1. Team size and expertise
+2. Expected user load
+3. Development resources
+4. Maintenance capabilities
+5. Scaling requirements
+For our current task management system, the microservices architecture, despite higher complexity, provides 
+better long-term benefits in terms of maintainability and scalability. However, monitoring and optimization 
+should be ongoing priorities.
+Task 4b: Architecture Analysis
+6
