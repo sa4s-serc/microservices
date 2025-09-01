@@ -1,0 +1,53 @@
+MICROSERVICE: courseservice
+
+  FUNCTIONAL SCOPE:
+  - Manages course lifecycle (creation, deletion, registration) and team formation within courses
+  - Handles course-student enrollment relationships and team-student membership
+  - Enforces business rules for team size limits and course constraints
+  - Provides unified management of both course and team subsystems (merged per ADR 2)
+
+  KEY FEATURES IMPLEMENTED:
+  - Course CRUD operations with admin-only creation/deletion
+  - Student course registration and withdrawal
+  - Team creation within courses by enrolled students
+  - Team membership management with automatic size tracking
+  - Cascading deletion (course deletion removes all teams and memberships)
+  - Single team per course per student constraint enforcement
+
+  API RESPONSIBILITIES:
+  - Course management endpoints (/api/courses): list, create, delete, get course details
+  - Course enrollment endpoints: register/withdraw students from courses
+  - Team management endpoints (/api/teams): create teams, manage membership
+  - Team query endpoints: get teams by course, get student's teams, get team members
+  - Database initialization endpoints for table creation
+
+  DATA RESPONSIBILITIES:
+  - Course entity: courseId, courseName, teamSize (max team size limit)
+  - Team entity: teamId, courseId, teamName, teamSize (current size)
+  - CourseStudent relationship: manages course enrollment
+  - TeamStudent relationship: manages team membership with transactional integrity
+  - Enforces constraint: one team per course per student
+  - Automatic team deletion when team size reaches zero
+
+  INTEGRATIONS:
+  - Uses JWT tokens from userservice for authentication and authorization
+  - Admin role (userId = 0) required for course creation/deletion
+  - Student authentication required for enrollment and team operations
+  - PostgreSQL database (courseservice_db) for persistent storage
+  - CORS configuration for frontend communication
+
+  TECHNICAL APPROACH:
+  - Spring Boot REST microservice with layered architecture
+  - Database-first approach with DAO pattern for data access
+  - Transactional operations for team membership changes
+  - JWT-based stateless authentication
+  - Role-based access control (Admin vs Student permissions)
+  - Direct database connections without ORM
+
+  IMPLEMENTATION NOTES:
+  - Team creation automatically removes student from any existing team in that course
+  - Course withdrawal automatically removes student from associated teams
+  - Team size is maintained in real-time through transactional updates
+  - Validation ensures students can only operate on courses they're enrolled in
+  - Cascading deletes maintain referential integrity
+  - Admin operations restricted to userId = 0 (admin user)

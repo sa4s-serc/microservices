@@ -1,0 +1,50 @@
+MICROSERVICE: taskservice
+
+  FUNCTIONAL SCOPE:
+  - Manages team-based task creation, assignment, tracking, and lifecycle operations
+  - Provides task management capabilities exclusively for team members within the TeamSync collaborative platform
+
+  KEY FEATURES IMPLEMENTED:
+  - Task CRUD operations (create, read, update, delete)
+  - Team-scoped task viewing and management
+  - Individual user task assignment and tracking
+  - Task completion status management
+  - JWT-based authentication and authorization
+
+  API RESPONSIBILITIES:
+  - POST /api/tasks/init - Initialize task database table
+  - POST /api/tasks - Create new tasks for teams
+  - PUT /api/tasks - Update existing task properties (title, description, completion status, assignment)
+  - GET /api/tasks/team/{teamId} - Retrieve all tasks for a specific team
+  - GET /api/tasks/my - Retrieve tasks assigned to the authenticated user
+
+  DATA RESPONSIBILITIES:
+  - Manages Task entities with properties: taskId, teamId, assignedToId, title, description, completed
+  - Enforces team-based data isolation (tasks belong to teams)
+  - Maintains task assignment relationships to team members
+  - Stores completion status and task metadata
+  - Uses dedicated PostgreSQL database (task_db) on port 5432
+
+  INTEGRATIONS:
+  - Depends on JWT tokens issued by userservice for authentication
+  - Receives teamId references from courseservice/team management operations
+  - Implicitly integrated with team deletion cascades (when teams are deleted, tasks should be cleaned up)
+  - Frontend integration through task.js for UI interactions
+  - CORS configuration allows frontend access from http://127.0.0.1:5500/
+
+  TECHNICAL APPROACH:
+  - Spring Boot REST API microservice running on port 4324
+  - Layered architecture: Database → Model → DAO → Resource → Frontend
+  - Direct JDBC connections with prepared statements for data access
+  - JWT-based stateless authentication with shared secret key
+  - PostgreSQL for persistent storage with ACID compliance
+  - Maven build system with Java 17
+
+  IMPLEMENTATION NOTES:
+  - Security constraint: Only team members can access their team's tasks (enforced via teamId filtering)
+  - Task assignment allows responsibility transfer between team members
+  - Dynamic SQL updates support partial task property modifications
+  - Missing DELETE endpoint implementation (DAO method exists but no REST endpoint)
+  - Uses "status" column in database but "completed" in model (boolean mapping)
+  - No explicit cascade delete handling for team deletion scenarios
+  - Authentication relies on parsing JWT username as integer userId

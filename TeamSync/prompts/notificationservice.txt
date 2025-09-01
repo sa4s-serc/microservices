@@ -1,0 +1,49 @@
+MICROSERVICE: notificationservice
+
+  FUNCTIONAL SCOPE:
+  - Manages real-time notifications for team collaboration events
+  - Handles join requests, team invitations, and team member communications
+  - Provides actionable notification system with Accept/Decline capabilities
+
+  KEY FEATURES IMPLEMENTED:
+  - Team join request notifications with student-to-team messaging
+  - General team messaging system for internal communication
+  - Interactive notification handling (accept/reject join requests)
+  - Team-specific notification filtering and retrieval
+  - Automated notification lifecycle management
+
+  API RESPONSIBILITIES:
+  - POST /api/notifications/request-to-join: Create join requests from students to teams
+  - POST /api/notifications/team-message: Send messages within teams
+  - POST /api/notifications/{id}/accept: Accept join requests and trigger team membership
+  - POST /api/notifications/{id}/reject: Reject and delete notifications
+  - GET /api/notifications/team/{teamId}: Retrieve team-specific notifications
+  - GET /api/notifications: Retrieve all notifications
+  - DELETE /api/notifications/{id}: Delete specific notifications
+
+  DATA RESPONSIBILITIES:
+  - Notification entity: stores sender (fromStudentId), target team (toTeamId), type, and description
+  - TeamNotification relationship: links notifications to teams with sender tracking
+  - NotificationType enum: REQUEST_TO_JOIN and MESSAGE types
+  - Maintains referential integrity with cascading deletes
+
+  INTEGRATIONS:
+  - Receives authenticated requests via JWT tokens from frontend
+  - Extracts user identity from JWT for notification attribution
+  - Designed to integrate with team service for actual team membership changes (currently stubbed)
+  - Uses PostgreSQL database (notificationservice_db) on port 5432
+  - Exposes REST API on port 4323
+
+  TECHNICAL APPROACH:
+  - Spring Boot microservice with layered architecture (DAO → Resource → Frontend)
+  - PostgreSQL for persistence with JDBC template pattern
+  - JWT-based authentication and user identification
+  - CORS enabled for frontend integration
+  - Follows standard Spring Boot REST conventions
+
+  IMPLEMENTATION NOTES:
+  - Accept/reject operations currently delete notifications but don't complete team membership changes
+  - Notification acceptance includes placeholder for team service integration
+  - System supports custom messages in notifications for flexibility
+  - Database schema enforces referential integrity between notifications and team notifications
+  - JWT extraction assumes username contains student ID as integer
