@@ -1,0 +1,90 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15
+    environment:
+      POSTGRES_DB: postgres
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  userservice:
+    build:
+      context: ./microservices/userservice
+      dockerfile: Dockerfile
+    ports:
+      - "4322:4322"
+    environment:
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/user_db
+      - SPRING_DATASOURCE_USERNAME=postgres
+      - SPRING_DATASOURCE_PASSWORD=password
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  courseservice:
+    build:
+      context: ./microservices/courseservice
+      dockerfile: Dockerfile
+    ports:
+      - "4321:4321"
+    environment:
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/courseservice_db
+      - SPRING_DATASOURCE_USERNAME=postgres
+      - SPRING_DATASOURCE_PASSWORD=password
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  taskservice:
+    build:
+      context: ./microservices/taskservice
+      dockerfile: Dockerfile
+    ports:
+      - "4324:4324"
+    environment:
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/courseservice_db
+      - SPRING_DATASOURCE_USERNAME=postgres
+      - SPRING_DATASOURCE_PASSWORD=password
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  notificationservice:
+    build:
+      context: ./microservices/notificationservice
+      dockerfile: Dockerfile
+    ports:
+      - "4323:4323"
+    environment:
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/courseservice_db
+      - SPRING_DATASOURCE_USERNAME=postgres
+      - SPRING_DATASOURCE_PASSWORD=password
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  frontend:
+    build:
+      context: ./microservices/frontend
+      dockerfile: Dockerfile
+    ports:
+      - "8080:80"
+    depends_on:
+      - userservice
+      - courseservice
+      - taskservice
+      - notificationservice
+
+volumes:
+  postgres_data:

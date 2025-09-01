@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>TeamSync</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="auth-container" class="auth-container">
+    <div class="login-card">
+      <h2 id="auth-title">Login</h2>
+      <form id="auth-form">
+        <div class="form-group">
+          <label for="username">Username</label>
+          <input type="text" id="username" required>
+        </div>
+        <div class="form-group">
+          <label for="password">Password</label>
+          <input type="password" id="password" required>
+        </div>
+        <div id="error-container" class="error-msg"></div>
+        <div id="success-container" class="success-msg"></div>
+        <button type="submit" class="auth-btn" id="auth-button">Login</button>
+      </form>
+      <div class="toggle-form">
+        <p>Don't have an account? <span id="toggle-auth">Register here</span></p>
+      </div>
+    </div>
+  </div>
+
+  <div id="app-container" class="app-container">
+    <div class="sidebar">
+      <div class="sidebar-header">
+        <h2>TeamSync</h2>
+        <hr>
+      </div>
+      <button onclick="loadProfile()">Profile</button>
+      <button onclick="loadCourses()">Courses</button>
+      <hr>
+      <button onclick="loadYourCourses()">Your Courses</button>
+      <button onclick="loadYourTeams()">Your Teams</button>
+      <button onclick="loadYourTasks()">Your Tasks</button>
+
+      <hr>
+
+      <button onclick="showAddCourseForm()">Add Course</button>
+      <button onclick="showDeleteCourseForm()">Delete Course</button>
+    </div>
+
+    <div class="main">
+      <div class="user-info">
+        <span id="user-display"></span>
+        <button class="logout-btn" onclick="logout()">Logout</button>
+      </div>
+      <div id="main-content">
+        <h2>Welcome to TeamSync</h2>
+      </div>
+    </div>
+  </div>
+  <script src="user.js"></script>
+  <script src="task.js"></script>
+  <script src="notification.js"></script>
+  <script src="course.js"></script>
+</body>
+</html>

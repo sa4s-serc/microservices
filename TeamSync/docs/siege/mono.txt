@@ -1,0 +1,4 @@
+http://localhost:4444/api/users/check-username/73
+http://localhost:4444/api/course
+http://localhost:4444/api/notifications
+http://localhost:4444/api/tasks/team/4
