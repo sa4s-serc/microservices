@@ -1,0 +1,545 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="description" content="An empirical study examining whether AI agents can generate functional microservices across different contextual scenarios, evaluating functional correctness, code quality, and efficiency.">
+  <meta name="keywords" content="Microservices, AI Agents, Code Generation, Software Architecture, LLM, Empirical Study">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Can AI Agents Generate Microservices? How Far are We?</title>
+
+  <link rel="icon" type="image/svg+xml" href="static/image/favicon.svg">
+  <link href="https://fonts.googleapis.com/css?family=Google+Sans|Noto+Sans|Castoro" rel="stylesheet">
+  <link rel="stylesheet" href="./static/css/bulma.min.css">
+  <link rel="stylesheet" href="./static/css/fontawesome.all.min.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/jpswalsh/academicons@1/css/academicons.min.css">
+  <link rel="stylesheet" href="./static/css/index.css">
+  <script defer src="./static/js/fontawesome.all.min.js"></script>
+  <style>
+    .equal-height .column { display: flex; }
+    .equal-height .column > .box,
+    .equal-height .column > .notification { width: 100%; }
+    .section-divider { border: 0; height: 2px; background: linear-gradient(to right, transparent, #dbdbdb, transparent); margin: 3rem 0; }
+  </style>
+</head>
+<body>
+
+<!-- Hero / Title -->
+<section class="hero">
+  <div class="hero-body">
+    <div class="container is-max-desktop">
+      <div class="columns is-centered">
+        <div class="column has-text-centered">
+          <h1 class="title is-1 publication-title">Can AI Agents Generate Microservices? How Far are We?</h1>
+          <div class="is-size-5 publication-authors">
+            <span class="author-block">
+              <a href="mailto:bassam.adnan@research.iiit.ac.in">Bassam Adnan</a><sup>1</sup>,</span>
+            <span class="author-block">
+              <a href="mailto:matteo.esposito@oulu.fi">Matteo Esposito</a><sup>2</sup>,</span>
+            <span class="author-block">
+              <a href="mailto:taibi@imada.sdu.dk">Davide Taibi</a><sup>2,3</sup>,</span>
+            <span class="author-block">
+              <a href="mailto:karthik.vaidhyanathan@iiit.ac.in">Karthik Vaidhyanathan</a><sup>1</sup></span>
+          </div>
+
+          <div class="is-size-5 publication-authors">
+            <span class="author-block"><sup>1</sup>SERC, IIIT Hyderabad, India</span>
+            <span class="author-block">&mdash; <sup>2</sup>University of Oulu, Finland</span>
+            <span class="author-block">&mdash; <sup>3</sup>University of Southern Denmark, Denmark</span>
+          </div>
+
+          <div class="is-size-5 publication-venue" style="margin-top: 0.5rem;">
+            <span>IEEE International Conference on Software Architecture (ICSA 2026)</span>
+          </div>
+
+          <div class="column has-text-centered">
+            <div class="publication-links">
+                <span class="link-block">
+                  <a href="https://arxiv.org/pdf/2603.09004"
+                     class="external-link button is-normal is-rounded is-dark">
+                    <span class="icon">
+                        <i class="fas fa-file-pdf"></i>
+                    </span>
+                    <span>Paper</span>
+                  </a>
+                </span>
+                <span class="link-block">
+                  <a href="https://arxiv.org/abs/2603.09004"
+                     class="external-link button is-normal is-rounded is-dark">
+                    <span class="icon">
+                        <i class="ai ai-arxiv"></i>
+                    </span>
+                    <span>arXiv</span>
+                  </a>
+                </span>
+              <span class="link-block">
+                <a href="#" class="external-link button is-normal is-rounded is-dark">
+                  <span class="icon">
+                      <i class="fab fa-github"></i>
+                  </span>
+                  <span>Code</span>
+                </a>
+              </span>
+              <span class="link-block">
+                <a href="https://doi.org/10.5281/zenodo.17863951" class="external-link button is-normal is-rounded is-dark">
+                  <span class="icon">
+                      <i class="fas fa-database"></i>
+                  </span>
+                  <span>Data</span>
+                </a>
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="section">
+  <div class="container is-max-desktop">
+
+    <!-- Abstract -->
+    <div class="columns is-centered has-text-centered">
+      <div class="column is-four-fifths">
+        <h2 class="title is-3">Abstract</h2>
+        <div class="content has-text-justified">
+          <p>
+            <strong>Context.</strong> LLMs have advanced code generation, but their use for generating microservices with explicit dependencies and API contracts remains understudied.
+          </p>
+          <p>
+            <strong>Goal.</strong> We examine whether AI agents can generate functional microservices and how different forms of contextual information influence their performance.
+          </p>
+          <p>
+            <strong>Method.</strong> We assess 144 generated microservices across 3 agents, 4 projects, 2 prompting strategies, and 2 scenarios. Incremental generation operates within existing systems and is evaluated with unit tests. Clean state generation starts from requirements alone and is evaluated with integration tests. We analyze functional correctness, code quality, and efficiency.
+          </p>
+          <p>
+            <strong>Results.</strong> Minimal prompts outperformed detailed ones in incremental generation, with 50&ndash;76% unit test pass rates. Clean state generation produced higher integration test pass rates (81&ndash;98%), indicating strong API contract adherence. Generated code showed lower complexity than human baselines. Generation times varied widely across agents, averaging 6&ndash;16 minutes per service.
+          </p>
+          <p>
+            <strong>Conclusions.</strong> AI agents can produce microservices with maintainable code, yet inconsistent correctness and reliance on human oversight show that fully autonomous microservice generation is not yet achievable.
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <hr class="section-divider">
+
+    <!-- Study Overview Figure -->
+    <div class="columns is-centered">
+      <div class="column is-full-width has-text-centered">
+        <h2 class="title is-3">Study Overview</h2>
+        <p class="subtitle is-6" style="margin-bottom: 1.5rem;">We evaluate 3 AI coding agents on their ability to generate microservices across 4 projects, 2 generation scenarios, and 2 prompt strategies&mdash;producing 144 implementations assessed for functional correctness, code quality, and efficiency.</p>
+        <figure class="image">
+          <img src="static/image/study_overview.png" alt="Overview of the Study Design" style="max-height: 500px; width: auto; margin: 0 auto;">
+        </figure>
+      </div>
+    </div>
+
+    <hr class="section-divider">
+
+    <!-- Research Questions -->
+    <div class="columns is-centered">
+      <div class="column is-full-width">
+        <h2 class="title is-3">Research Questions</h2>
+        <div class="content">
+          <div class="columns equal-height">
+            <div class="column is-half">
+              <div class="box">
+                <h4 class="title is-5">RQ<sub>1</sub>: Functional Correctness &amp; Code Quality</h4>
+                <p>To what extent can AI agents generate microservices across different contextual scenarios, in terms of functional correctness and code quality?</p>
+                <ul>
+                  <li><strong>RQ<sub>1.1</sub></strong> &mdash; Incremental generation: agents build within an existing system.</li>
+                  <li><strong>RQ<sub>1.2</sub></strong> &mdash; Clean state generation: agents work from requirements alone.</li>
+                </ul>
+              </div>
+            </div>
+            <div class="column is-half">
+              <div class="box">
+                <h4 class="title is-5">RQ<sub>2</sub>: Efficiency</h4>
+                <p>How do AI agents compare in efficiency when generating microservices?</p>
+                <ul>
+                  <li><strong>Token Consumption</strong> &mdash; Total input and output tokens.</li>
+                  <li><strong>Cost</strong> &mdash; Monetary costs based on each agent's pricing model.</li>
+                  <li><strong>Generation Time</strong> &mdash; Total time from start to completion.</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <hr class="section-divider">
+
+    <!-- Study Design -->
+    <div class="columns is-centered">
+      <div class="column is-full-width">
+        <h2 class="title is-3">Study Design</h2>
+
+        <div class="content has-text-justified">
+          <p>We selected <strong>4 microservice systems</strong> (2 open-source, 2 private) ranging from 3 to 41 services, and <strong>3 AI coding agents</strong> representing both proprietary and open-source models. For each project, we selected 3 microservices based on business logic importance, generating them under each experimental condition (4 conditions &times; 3 agents &times; 3 services &times; 4 projects = <strong>144 total implementations</strong>).</p>
+        </div>
+
+        <div class="columns">
+          <div class="column is-half">
+            <h4 class="title is-5">Projects</h4>
+            <table class="table is-bordered is-striped is-fullwidth is-size-7">
+              <thead>
+                <tr><th>Project</th><th>Lang.</th><th>Services</th><th>Description</th></tr>
+              </thead>
+              <tbody>
+                <tr><td>PiggyMetrics (O)</td><td>Java</td><td>3</td><td>Personal finance management</td></tr>
+                <tr><td>Train-Ticket (O)</td><td>Java</td><td>41</td><td>Train ticket booking system</td></tr>
+                <tr><td>TeamSync (P)</td><td>Java</td><td>4</td><td>Team collaboration platform</td></tr>
+                <tr><td>Project-Mgmt (P)</td><td>Python</td><td>4</td><td>Collaborative task management</td></tr>
+              </tbody>
+            </table>
+            <p class="is-size-7">O = Open Source, P = Private</p>
+          </div>
+          <div class="column is-half">
+            <h4 class="title is-5">AI Coding Agents</h4>
+            <table class="table is-bordered is-striped is-fullwidth is-size-7">
+              <thead>
+                <tr><th>Agent</th><th>Model</th><th>Context</th><th>License</th></tr>
+              </thead>
+              <tbody>
+                <tr><td>Claude Code</td><td>claude-sonnet-4</td><td>1M</td><td>Proprietary</td></tr>
+                <tr><td>Codex</td><td>GPT-5 (high effort)</td><td>400K</td><td>Proprietary</td></tr>
+                <tr><td>Code Qwen</td><td>qwen3-coder-480b</td><td>1M</td><td>Open</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <h4 class="title is-5" style="margin-top: 1.5rem;">Experimental Conditions</h4>
+        <div class="content has-text-justified">
+          <p>Each microservice is generated under two <strong>scenarios</strong> (how much existing code the agent can see) combined with two <strong>prompt strategies</strong> (how much guidance the agent receives), yielding 4 conditions per generation task:</p>
+        </div>
+
+        <div class="columns" style="margin-bottom: 0.5rem;">
+          <div class="column is-6">
+            <div class="notification is-info is-light" style="height: 100%;">
+              <p class="has-text-weight-bold is-size-6">Incremental Generation</p>
+              <p>The target microservice's code is removed, but the rest of the system (integration points, dependencies, other services) remains intact. Agents can explore existing architecture. Evaluated with <strong>unit tests</strong>.</p>
+            </div>
+          </div>
+          <div class="column is-6">
+            <div class="notification is-success is-light" style="height: 100%;">
+              <p class="has-text-weight-bold is-size-6">Clean State Generation</p>
+              <p>All traces of the target microservice are removed&mdash;directory, config files, and API calls from other services. Agents must infer everything from requirements alone. Evaluated with <strong>integration tests</strong>.</p>
+            </div>
+          </div>
+        </div>
+        <div class="columns">
+          <div class="column is-6">
+            <div class="notification is-light" style="height: 100%; border: 1px solid #dbdbdb;">
+              <p class="has-text-weight-bold is-size-6">P1: Minimal Prompt</p>
+              <p>Only the microservice name + path to requirements. Agents must explore or infer on their own.</p>
+            </div>
+          </div>
+          <div class="column is-6">
+            <div class="notification is-light" style="height: 100%; border: 1px solid #dbdbdb;">
+              <p class="has-text-weight-bold is-size-6">P2: Prompt with Implementation Summary</p>
+              <p>Adds a generated summary covering functional scope, API responsibilities, integrations, and implementation notes.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <hr class="section-divider">
+
+    <!-- ============================================================ -->
+    <!--                         RESULTS                              -->
+    <!-- ============================================================ -->
+
+    <div class="columns is-centered">
+      <div class="column is-full-width">
+        <h2 class="title is-3">Results</h2>
+
+        <!-- RQ1: Functional Correctness -->
+        <h3 class="title is-4">Functional Correctness (RQ<sub>1</sub>)</h3>
+        <div class="content">
+          <p>We evaluated all 144 generated microservices for functional correctness through automated testing. The table below shows test pass rates (%) across all agents, projects, and conditions. <strong>B</strong> = human-written baseline, <strong>P1</strong> = minimal prompt, <strong>P2</strong> = prompt with summary.</p>
+
+          <div class="box" style="background-color: #fafafa; overflow-x: auto;">
+            <table class="table is-bordered is-striped is-fullwidth" style="font-size: 0.9em;">
+              <thead>
+                <tr>
+                  <th>Agent</th>
+                  <th>Project</th>
+                  <th colspan="3" class="has-text-centered">Incremental (unit tests)</th>
+                  <th colspan="3" class="has-text-centered">Clean State (integration tests)</th>
+                </tr>
+                <tr>
+                  <th></th>
+                  <th></th>
+                  <th>B</th><th>P1</th><th>P2</th>
+                  <th>B</th><th>P1</th><th>P2</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td rowspan="5"><strong>Claude Code</strong></td>
+                  <td>PiggyMetrics</td>
+                  <td>100.0</td><td>91.1</td><td>81.7</td>
+                  <td>100.0</td><td>98.0</td><td>98.0</td>
+                </tr>
+                <tr>
+                  <td>Train-Ticket</td>
+                  <td>100.0</td><td>92.6</td><td>60.6</td>
+                  <td>81.5</td><td>97.0</td><td>97.0</td>
+                </tr>
+                <tr>
+                  <td>TeamSync</td>
+                  <td>100.0</td><td>66.7</td><td>66.7</td>
+                  <td>100.0</td><td>100.0</td><td>100.0</td>
+                </tr>
+                <tr>
+                  <td>Project-Mgmt</td>
+                  <td>92.3</td><td>44.3</td><td>43.9</td>
+                  <td>92.3</td><td>92.6</td><td>96.3</td>
+                </tr>
+                <tr style="background-color: #f0f0f0;">
+                  <td><em>Average</em></td>
+                  <td>-</td><td><strong>73.7</strong></td><td><strong>63.2</strong></td>
+                  <td>-</td><td><strong>96.9</strong></td><td><strong>97.8</strong></td>
+                </tr>
+                <tr>
+                  <td rowspan="5"><strong>Codex</strong></td>
+                  <td>PiggyMetrics</td>
+                  <td>100.0</td><td>93.8</td><td>93.3</td>
+                  <td>100.0</td><td>99.0</td><td>65.7</td>
+                </tr>
+                <tr>
+                  <td>Train-Ticket</td>
+                  <td>100.0</td><td>100.0</td><td>59.8</td>
+                  <td>81.5</td><td>97.0</td><td>97.0</td>
+                </tr>
+                <tr>
+                  <td>TeamSync</td>
+                  <td>100.0</td><td>66.7</td><td>0.0</td>
+                  <td>100.0</td><td>100.0</td><td>100.0</td>
+                </tr>
+                <tr>
+                  <td>Project-Mgmt</td>
+                  <td>92.3</td><td>43.0</td><td>48.0</td>
+                  <td>92.3</td><td>96.3</td><td>63.0</td>
+                </tr>
+                <tr style="background-color: #f0f0f0;">
+                  <td><em>Average</em></td>
+                  <td>-</td><td><strong>75.9</strong></td><td><strong>50.3</strong></td>
+                  <td>-</td><td><strong>98.1</strong></td><td><strong>81.4</strong></td>
+                </tr>
+                <tr>
+                  <td rowspan="5"><strong>Code Qwen</strong></td>
+                  <td>PiggyMetrics</td>
+                  <td>100.0</td><td>66.7</td><td>84.1</td>
+                  <td>100.0</td><td>98.0</td><td>98.0</td>
+                </tr>
+                <tr>
+                  <td>Train-Ticket</td>
+                  <td>100.0</td><td>60.6</td><td>25.3</td>
+                  <td>81.5</td><td>33.3</td><td>97.0</td>
+                </tr>
+                <tr>
+                  <td>TeamSync</td>
+                  <td>100.0</td><td>33.3</td><td>33.3</td>
+                  <td>100.0</td><td>100.0</td><td>100.0</td>
+                </tr>
+                <tr>
+                  <td>Project-Mgmt</td>
+                  <td>92.3</td><td>41.5</td><td>46.0</td>
+                  <td>92.3</td><td>96.3</td><td>63.0</td>
+                </tr>
+                <tr style="background-color: #f0f0f0;">
+                  <td><em>Average</em></td>
+                  <td>-</td><td><strong>50.5</strong></td><td><strong>47.2</strong></td>
+                  <td>-</td><td><strong>81.9</strong></td><td><strong>89.5</strong></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div class="columns equal-height" style="margin-top: 1.5rem;">
+            <div class="column is-half">
+              <div class="notification is-info is-light">
+                <p class="has-text-weight-semibold">Incremental Generation</p>
+                <ul>
+                  <li>Codex achieved the highest average with P1 prompts (<strong>75.9%</strong>)</li>
+                  <li>Claude Code followed closely at <strong>73.7%</strong></li>
+                  <li>P2 prompts (with summaries) <em>degraded</em> performance across all agents</li>
+                  <li>Agents anchored on summaries instead of exploring the codebase</li>
+                </ul>
+              </div>
+            </div>
+            <div class="column is-half">
+              <div class="notification is-success is-light">
+                <p class="has-text-weight-semibold">Clean State Generation</p>
+                <ul>
+                  <li>Substantially higher pass rates: <strong>81&ndash;98%</strong> average</li>
+                  <li>Claude Code most consistent (<strong>97.8%</strong> with P2)</li>
+                  <li>Integration tests more tolerant of structural differences</li>
+                  <li>Code Qwen recovered with P2 prompts (+63.7 pp improvement)</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <hr class="section-divider">
+
+        <!-- Code Quality -->
+        <h3 class="title is-4">Code Quality (RQ<sub>1</sub>)</h3>
+        <div class="content">
+          <p>We compared generated code against human-written baselines using SonarQube metrics: Lines of Code (LoC), Cyclomatic Complexity (CycC), and Cognitive Complexity (CogC). The top row compares by agent, the bottom row by experimental configuration.</p>
+          <figure class="image" style="margin-top: 1rem;">
+            <img src="static/image/code_quality.png" alt="Code Quality Metrics comparison" style="width: 100%; margin: 0 auto;">
+          </figure>
+          <div class="notification is-link is-light" style="margin-top: 1rem;">
+            <p>Generated code generally exhibits <strong>lower complexity</strong> compared to baselines. Claude Code and Codex consistently produced code with <strong>20&ndash;30% lower</strong> cyclomatic and cognitive complexity across all configurations, while maintaining comparable Lines of Code.</p>
+          </div>
+        </div>
+
+        <hr class="section-divider">
+
+        <!-- RQ2: Efficiency -->
+        <h3 class="title is-4">Efficiency (RQ<sub>2</sub>)</h3>
+        <div class="content">
+          <p>We compared generation time, token consumption, and monetary cost across all 48 runs per agent (4 projects &times; 3 services &times; 4 conditions).</p>
+
+          <div class="box" style="background-color: #fafafa;">
+            <table class="table is-bordered is-striped is-fullwidth">
+              <thead>
+                <tr>
+                  <th>Agent</th>
+                  <th>Avg Time (min)</th>
+                  <th>Total Time (hrs)</th>
+                  <th>Input Tokens (K)</th>
+                  <th>Output Tokens (K)</th>
+                  <th>Avg Cost ($)</th>
+                  <th>Total Cost ($)</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><strong>Claude Code</strong></td>
+                  <td>7.8</td><td>6.20</td><td>4,416</td><td>2.1</td><td>13.28</td><td>637.39</td>
+                </tr>
+                <tr>
+                  <td><strong>Codex</strong></td>
+                  <td>16.6</td><td>13.25</td><td>4,436</td><td>37.5</td><td>5.92</td><td>284.19</td>
+                </tr>
+                <tr>
+                  <td><strong>Code Qwen</strong></td>
+                  <td>7.6</td><td>6.10</td><td>2,916</td><td>16.2</td><td>2.98</td><td>143.08</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <figure class="image" style="margin-top: 1.5rem;">
+            <img src="static/image/time_cost.png" alt="Time and Cost comparison across agents" style="width: 100%; margin: 0 auto;">
+            <figcaption class="is-size-6 has-text-centered" style="margin-top: 0.5rem;">Generation time (left) and monetary cost (right) distribution across agents. Codex y-axis truncated at 35 min (max outlier: 104 min).</figcaption>
+          </figure>
+
+          <div class="notification is-warning is-light" style="margin-top: 1.5rem;">
+            <p class="has-text-weight-semibold">Key Efficiency Findings</p>
+            <ul>
+              <li>Claude Code and Code Qwen are faster (<strong>7&ndash;8 min</strong> avg) while Codex is slower (<strong>16.6 min</strong> avg) with outliers reaching 104 minutes</li>
+              <li>Code Qwen is most cost-effective (<strong>$2.98/service</strong>); Claude Code is most expensive (<strong>$13.28/service</strong>) but generates the most concise output (2.1K tokens avg)</li>
+              <li>Token verbosity does <em>not</em> correlate with functional correctness</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <hr class="section-divider">
+
+    <!-- Key Findings -->
+    <div class="columns is-centered">
+      <div class="column is-full-width">
+        <h2 class="title is-3">Key Findings</h2>
+        <div class="content">
+          <div class="columns equal-height">
+            <div class="column is-half">
+              <div class="box">
+                <h4 class="title is-5">Summaries Can Hurt</h4>
+                <p>Explicit implementation summaries (P2) <strong>degraded</strong> incremental generation. Agents anchored on high-level summary details, missing low-level specifics they would have discovered through codebase exploration with minimal prompts (P1).</p>
+              </div>
+            </div>
+            <div class="column is-half">
+              <div class="box">
+                <h4 class="title is-5">Context Matters More Than Prompts</h4>
+                <p>The choice of generation scenario (incremental vs. clean state) has a <strong>statistically significant</strong> impact on correctness (Z = 5.180, p &lt; 0.001), while prompt type differences (P1 vs P2) did <em>not</em> reach significance (p = 0.140).</p>
+              </div>
+            </div>
+          </div>
+          <div class="columns equal-height">
+            <div class="column is-half">
+              <div class="box">
+                <h4 class="title is-5">Data Contamination Effects</h4>
+                <p>Agents performed substantially better on popular open-source repositories (PiggyMetrics, Train-Ticket) than private projects, likely reflecting training data memorization. This disparity persisted across all agents.</p>
+              </div>
+            </div>
+            <div class="column is-half">
+              <div class="box">
+                <h4 class="title is-5">Concise &ne; Incomplete</h4>
+                <p>Generated microservices are typically <strong>more concise</strong> than human baselines but achieve comparable test pass rates. Code verbosity does not correlate with quality&mdash;brevity should not be interpreted as insufficient.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <hr class="section-divider">
+
+    <!-- Implications -->
+    <div class="columns is-centered">
+      <div class="column is-full-width">
+        <h2 class="title is-3">Implications for Practice</h2>
+        <div class="content has-text-justified">
+          <ul>
+            <li><strong>Agent and prompt selection must be determined empirically</strong> rather than following general guidelines. Minimal prompts (P1) consistently outperformed detailed summaries for Codex and Claude Code, while Code Qwen required explicit guidance (P2) in clean state scenarios.</li>
+            <li><strong>Plan for timeout risks and establish generation time limits.</strong> Codex showed concerning outliers reaching 104 minutes. Production systems should implement timeout mechanisms (e.g., 15&ndash;20 minute limits) and fallback strategies.</li>
+            <li><strong>Expect performance degradation on proprietary codebases</strong> compared to benchmark results. Pilot evaluations on actual production microservices provide more realistic performance expectations than public benchmarks.</li>
+            <li><strong>Anticipate evolution toward architecture-specific tooling.</strong> Current agents excel at implementation but lack architectural reasoning about organizational context and system-wide trade-offs.</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+<!-- BibTeX -->
+<section class="section" id="BibTeX">
+  <div class="container is-max-desktop content">
+    <h2 class="title">BibTeX</h2>
+    <pre><code>@inproceedings{adnan2026microservices,
+  title={Can AI Agents Generate Microservices? How Far are We?},
+  author={Adnan, Bassam and Esposito, Matteo and Taibi, Davide and Vaidhyanathan, Karthik},
+  booktitle={IEEE International Conference on Software Architecture (ICSA)},
+  year={2026}
+}</code></pre>
+  </div>
+</section>
+
+<footer class="footer">
+  <div class="container">
+    <div class="columns is-centered">
+      <div class="column is-8">
+        <div class="content">
+          <p>
+            Website template borrowed from <a href="https://github.com/nerfies/nerfies.github.io">NeRFies</a>.
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+</footer>
+</body>
+
+</html>
